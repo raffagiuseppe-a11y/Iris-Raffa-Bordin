@@ -525,7 +525,7 @@ function drawArtwork(canvas, entries, upToDate=null) {
       const cy = rng()*H;
       const size = 60 + rng()*220;
 
-      // ── 1. LARGE FLUID BLOB (Image 1 & 2 style) ──
+      // ── 1. LARGE FLUID BLOB ──
       for(let layer=0; layer<3; layer++){
         const r = size*(1.4-layer*0.3);
         const offsetX = (rng()-0.5)*30;
@@ -534,9 +534,10 @@ function drawArtwork(canvas, entries, upToDate=null) {
           cx+offsetX, cy+offsetY, r*0.05,
           cx+offsetX, cy+offsetY, r
         );
+        // Use only solid color + globalAlpha — avoids invalid HSL+hex strings
         grad.addColorStop(0, color);
-        grad.addColorStop(0.5, color+"cc");
-        grad.addColorStop(1, color+"00");
+        grad.addColorStop(0.6, color);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
         ctx.globalAlpha = 0.18 + rng()*0.28 - layer*0.05;
         ctx.fillStyle = grad;
         ctx.beginPath();
@@ -566,13 +567,9 @@ function drawArtwork(canvas, entries, upToDate=null) {
         for(let s=0;s<ribbonLen;s++){
           [rx,ry] = fluidPath(ctx, rx,ry, rng, ribbonSize);
         }
-        const ribbonGrad = ctx.createLinearGradient(cx-size,cy,cx+size,cy);
-        ribbonGrad.addColorStop(0, color+"00");
-        ribbonGrad.addColorStop(0.3, color+"ee");
-        ribbonGrad.addColorStop(0.7, color+"ee");
-        ribbonGrad.addColorStop(1, color+"00");
+        // Use globalAlpha for fade, not string concat
         ctx.globalAlpha = 0.45+rng()*0.45;
-        ctx.strokeStyle = ribbonGrad;
+        ctx.strokeStyle = color;
         ctx.lineWidth = 4+rng()*28;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
@@ -730,8 +727,13 @@ function render(){
           <button class="ghost-btn" style="padding:12px 14px" onclick="loadAndRefresh()">↻</button>
         </div>
         <div class="share-box">📱 Salva questa pagina nei preferiti del telefono per aprirla ogni giorno</div>
-        ${s.fbStatus==="error:Failed to fetch"?`<div style="margin-top:8px;padding:8px 12px;background:#ffeaea;border:1px solid #f5c0c0;border-radius:10px;font-size:.72rem;color:#a03030;text-align:center">⚠️ Firebase non raggiungibile. Controlla le regole del database.</div>`:""}
-        ${s.fbStatus==="error"+":"+"fbGet"?`<div style="margin-top:8px;padding:8px 12px;background:#ffeaea;border:1px solid #f5c0c0;border-radius:10px;font-size:.72rem;color:#a03030;text-align:center">⚠️ Errore caricamento dati Firebase.</div>`:""}
+        ${s.fbStatus&&s.fbStatus.startsWith("error")?`
+          <div style="margin-top:10px;padding:12px 14px;background:#ffeaea;border:1px solid #f5c0c0;border-radius:12px;font-size:.75rem;color:#a03030;line-height:1.6">
+            ⚠️ <strong>Firebase non raggiungibile</strong><br>
+            Vai su <strong>console.firebase.google.com</strong> → Realtime Database → Regole<br>
+            e assicurati che le regole siano:<br>
+            <code style="background:#fff3f3;padding:2px 6px;border-radius:4px;font-size:.7rem">".read":true, ".write":true</code>
+          </div>`:""}
       </div>`;
     return;
   }
