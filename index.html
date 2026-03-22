@@ -497,11 +497,12 @@ function drawArtwork(canvas, entries, upToDate=null) {
 
   let dates = Object.keys(entries).sort();
   if(upToDate) dates = dates.filter(d => d <= upToDate);
-  if(dates.length===0) return;
 
-  // Deep dark background — makes colors glow
+  // Always draw background so canvas is never transparent-black
   ctx.fillStyle="#0d0d14";
   ctx.fillRect(0,0,W,H);
+
+  if(dates.length===0) return;
 
   // Helper: smooth random cubic bezier path
   function fluidPath(ctx, x0,y0, rng, size){
@@ -648,6 +649,7 @@ let state={
   pickedIdx:null,
   flash:false,
   evoDay:null,
+  fbStatus:"idle",
 };
 
 function setState(patch){
@@ -659,10 +661,19 @@ function setState(patch){
    FIREBASE OPS
 ═══════════════════════════════════════ */
 async function loadEntries(){
+  state.fbStatus="loading";
   try{
     const data=await fbGet("iris_entries");
-    if(data&&typeof data==="object") state.entries=data;
-  }catch(e){console.warn("Firebase load:",e);}
+    if(data&&typeof data==="object"){
+      state.entries=data;
+      state.fbStatus="ok";
+    } else {
+      state.fbStatus="empty"; // Firebase vuoto — nessun colore ancora
+    }
+  }catch(e){
+    console.warn("Firebase load:",e);
+    state.fbStatus="error:"+e.message;
+  }
 }
 
 /* ═══════════════════════════════════════
@@ -719,6 +730,8 @@ function render(){
           <button class="ghost-btn" style="padding:12px 14px" onclick="loadAndRefresh()">↻</button>
         </div>
         <div class="share-box">📱 Salva questa pagina nei preferiti del telefono per aprirla ogni giorno</div>
+        ${s.fbStatus==="error:Failed to fetch"?`<div style="margin-top:8px;padding:8px 12px;background:#ffeaea;border:1px solid #f5c0c0;border-radius:10px;font-size:.72rem;color:#a03030;text-align:center">⚠️ Firebase non raggiungibile. Controlla le regole del database.</div>`:""}
+        ${s.fbStatus==="error"+":"+"fbGet"?`<div style="margin-top:8px;padding:8px 12px;background:#ffeaea;border:1px solid #f5c0c0;border-radius:10px;font-size:.72rem;color:#a03030;text-align:center">⚠️ Errore caricamento dati Firebase.</div>`:""}
       </div>`;
     return;
   }
@@ -787,6 +800,12 @@ function render(){
         <h2 class="logo" style="font-size:1.4rem;margin-bottom:4px">IRIS — il vostro quadro</h2>
         <p class="sub">${totalDays>0?`${totalDays} ${totalDays===1?"giorno":"giorni"} · ${totalColors} colori depositati`:"Ancora nessun colore."}</p>
         <canvas id="irisCanvas" class="canvas-wrap"></canvas>
+        ${sortedDates.length===0?`
+          <div style="text-align:center;padding:16px;background:rgba(255,255,255,0.4);border-radius:12px;margin-bottom:16px;border:1px solid #c8e0ca">
+            <div style="font-size:1.5rem;margin-bottom:8px">🌱</div>
+            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;color:#2d5a30;letter-spacing:.04em;text-transform:uppercase">Nessun colore ancora</div>
+            <div style="font-size:.75rem;color:#7a9a7c;margin-top:6px">Torna alla home, scegli il tuo nome e aggiungi il primo colore!</div>
+          </div>`:""}
         ${sliderHtml}
         ${colorsOfDay?`<div style="margin-bottom:20px"><span class="label" style="margin-bottom:8px">${s.evoDay===null?"Colori di oggi":"Colori di quel giorno"}</span><div style="display:flex;gap:10px;flex-wrap:wrap">${colorsOfDay}</div></div>`:""}
         <button class="btn" onclick="goHome()">+ Aggiungi colori</button>
