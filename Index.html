@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>IRIS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{min-height:100vh;background:#d4ead6;background-image:radial-gradient(ellipse at 30% 20%,#c2e0c5 0%,#d4ead6 55%,#bddbbf 100%);font-family:'Plus Jakarta Sans',sans-serif;color:#1a2e1c;display:flex;align-items:center;justify-content:center;padding:16px;}
+.card{background:rgba(240,250,241,0.85);backdrop-filter:blur(12px);border:1px solid #a8cfaa;border-radius:24px;padding:36px 28px;max-width:420px;width:100%;box-shadow:0 6px 36px rgba(60,100,64,0.14),0 1px 0 #ffffff60 inset;}
+.card-wide{max-width:480px;}
+.logo{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;letter-spacing:-0.03em;color:#1a2e1c;line-height:1.1;text-transform:uppercase;}
+.logo-sm{font-size:1.5rem;}
+.sub{font-size:.85rem;color:#5a7a5c;line-height:1.6;margin-bottom:20px;}
+.label{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:#7a9a7c;display:block;font-weight:500;margin-bottom:6px;}
+.date-str{font-size:.72rem;color:#7a9a7c;letter-spacing:.12em;text-transform:uppercase;font-weight:500;margin-bottom:16px;}
+.btn{width:100%;background:#2d5a30;color:#f0f7f0;border:none;border-radius:14px;padding:14px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:'Syne',sans-serif;letter-spacing:.04em;text-transform:uppercase;margin-top:8px;}
+.btn:active{opacity:.85;}
+.ghost-btn{background:rgba(255,255,255,0.5);color:#3d6b40;border:1px solid #a8cfaa;border-radius:14px;padding:12px 20px;font-size:.82rem;cursor:pointer;font-family:'Syne',sans-serif;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+.back-btn{background:transparent;border:none;color:#7a9a7c;font-size:.78rem;cursor:pointer;font-family:'Syne',sans-serif;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:24px;display:inline-block;padding:0;}
+.theme-block{background:rgba(255,255,255,0.45);border:1px solid #c8e0ca;border-radius:16px;padding:18px 16px;margin-bottom:20px;text-align:center;}
+.member-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:20px;}
+.member-btn{background:rgba(255,255,255,0.55);border:1px solid #b8d8ba;border-radius:14px;padding:16px 10px;color:#1a2e1c;font-size:.88rem;font-weight:500;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;text-align:center;line-height:1.4;}
+.member-btn:active{opacity:.8;}
+.stats-row{display:flex;gap:12px;}
+.stat{text-align:center;flex:1;background:rgba(255,255,255,0.5);border-radius:12px;padding:12px 8px;border:1px solid #c8e0ca;}
+.stat-num{font-family:'Syne',sans-serif;font-size:1.9rem;font-weight:800;color:#2d5a30;display:block;line-height:1;letter-spacing:-.04em;}
+.stat-label{font-size:.62rem;color:#7a9a7c;letter-spacing:.12em;text-transform:uppercase;font-weight:500;}
+.palette7{display:flex;gap:8px;justify-content:center;margin-bottom:24px;align-items:flex-end;}
+.swatch{border-radius:50%;cursor:pointer;border:2px solid rgba(255,255,255,.4);transition:all .2s;outline:none;flex-shrink:0;}
+.swatch.active{border:3px solid #1a2e1c;transform:scale(1.2) translateY(-5px);}
+.canvas-wrap{width:100%;border-radius:16px;overflow:hidden;display:block;margin:12px auto;box-shadow:0 4px 24px rgba(60,100,64,.12);background:#0d0d14;min-height:200px;}
+.share-box{margin-top:14px;background:rgba(45,90,48,.07);border:1px solid #a8cfaa;border-radius:12px;padding:10px 14px;font-size:.72rem;color:#5a7a5c;line-height:1.5;text-align:center;}
+.flex-row{display:flex;gap:10px;}
+.spinner{width:32px;height:32px;border-radius:50%;border:2px solid #a8cfaa;border-top-color:#2d5a30;animation:spin .8s linear infinite;margin:0 auto;}
+@keyframes spin{to{transform:rotate(360deg)}}
+input[type=range]{width:100%;accent-color:#2d5a30;cursor:pointer;}
+.evo-box{margin-bottom:20px;background:rgba(255,255,255,.45);border:1px solid #c8e0ca;border-radius:14px;padding:14px 16px;}
+.dot{width:10px;height:10px;border-radius:50%;margin:0 auto 5px;}
+.today-dots{display:flex;gap:4px;justify-content:center;margin-top:8px;}
+.today-dot{width:7px;height:7px;border-radius:50%;transition:all .3s;}
+.preview-dots{display:flex;gap:4px;justify-content:center;margin-top:12px;}
+.preview-dot{width:18px;height:18px;border-radius:50%;opacity:.85;}
+#app{width:100%;}
+</style>
+</head>
+<body>
+<div id="app"><div class="card" style="text-align:center"><div class="spinner"></div></div></div>
+
+<script>
+/* ═══════════════════════════════════════
+   UTILS
+═══════════════════════════════════════ */
+function seededRng(seed){
+  let s=seed|1;
+  return()=>{s=Math.imul(s^(s>>>15),s|1);s^=s+Math.imul(s^(s>>>7),s|61);return((s^(s>>>14))>>>0)/4294967296;};
+}
+function hashStr(str){
+  let h=0x811c9dc5;
+  for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193);}
+  return h>>>0;
+}
+function todayStr(){return new Date().toISOString().slice(0,10);}
+function fmtDate(iso){return new Date(iso+"T12:00:00").toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"});}
+function colorLuminance(col){
+  if(!col)return 128;
+  if(col.startsWith("hsl")){const m=col.match(/hsl\([\d.]+,[\d.]+%,([\d.]+)%\)/);return m?parseFloat(m[1])*2.55:128;}
+  return 0.299*parseInt(col.slice(1,3),16)+0.587*parseInt(col.slice(3,5),16)+0.114*parseInt(col.slice(5,7),16);
+}
+
+/* ═══════════════════════════════════════
+   FIREBASE
+═══════════════════════════════════════ */
+const DB="https://iris---rb-default-rtdb.europe-west1.firebasedatabase.app";
+async function fbGet(path){const r=await fetch(`${DB}/${path}.json`);if(!r.ok)throw new Error("fbGet");return r.json();}
+async function fbSet(path,data){const r=await fetch(`${DB}/${path}.json`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});if(!r.ok)throw new Error("fbSet");return r.json();}
+
+/* ═══════════════════════════════════════
+   DATA
+═══════════════════════════════════════ */
+const THEMES = (() => {
+  const G = (h, s=68) => [90,78,66,54,42,30,18].map(l=>`hsl(${h},${s}%,${l}%)`);
+
+  const EMO  = ["#2a2a2a","#f0c840","#f07048","#5a88e0","#5ec868","#e058a0","#78d8c8"];
+  const WEAT = ["#ffe060","#a8d8f0","#5888c8","#383858","#e07050","#b0d8a8","#f8f8f8"];
+  const ELEM = ["#e07840","#58b8e8","#60c870","#e8d040","#8060c8","#c0c0c0","#181828"];
+  const TIME = ["#ffb060","#ffe090","#f0f0c0","#f8c860","#e09050","#9060c8","#181838"];
+  const SEAS = ["#f8e040","#60c870","#f07840","#5888c8","#f0a860","#b8e8f0","#e080b0"];
+  const BODY = ["#e85050","#e8a050","#e8d050","#60c860","#5888e8","#9850d0","#c0c0c0"];
+  const SENS = ["#e85050","#f09050","#f0d050","#98d870","#50b0e8","#8850e8","#d050e8"];
+  const DREAM= ["#180830","#482080","#7848c0","#c088e0","#e8b8f0","#f8f0fc","#fffafe"];
+  const SOC  = ["#e85080","#e8a050","#e8d050","#68c870","#5a8ce8","#a860d8","#808080"];
+  const CREA = ["#e83880","#f08030","#f8d030","#60c870","#3888e0","#9838d8","#38d8c8"];
+
+  const T = [
+    // ══ FELICITÀ / GIOIA (giallo h=50) ══
+    ["Quanto sei felice oggi?","😊",G(50)],
+    ["Quanta gioia senti in questo momento?","✨",G(50)],
+    ["Quanto ti senti soddisfatto/a oggi?","🌟",G(50)],
+    ["Quanta serenità hai oggi?","🌸",G(54)],
+    ["Quanto ti senti grato/a oggi?","🙏",G(46)],
+    ["Quanta pace senti dentro di te?","☮️",G(54)],
+    ["Quanto sei contento/a di com'è andata?","🌈",G(50)],
+    ["Quanta leggerezza senti oggi?","🦋",G(52)],
+    ["Quanto ti senti a tuo agio?","🌻",G(48)],
+    ["Quanta armonia senti nella giornata?","🎵",G(52)],
+    ["Quanto il sorriso ti viene facile?","😁",G(50)],
+    ["Quanta dolcezza porta questa giornata?","🍯",G(48)],
+    ["Quanto ti senti in pace con te stesso/a?","🕊️",G(54)],
+    ["Quanta luce senti dentro?","💛",G(50)],
+    ["Quanto questa giornata ti ha dato?","🌞",G(52)],
+    ["Quanta spensieratezza senti?","🎈",G(50)],
+    ["Quanto ti senti appagato/a?","🌺",G(48)],
+    ["Quanta felicità condividi oggi?","🫶",G(52)],
+    ["Quanto il bello prevale sul brutto?","🌅",G(50)],
+    ["Quanta gioia dà qualcosa di piccolo oggi?","🌼",G(54)],
+
+    // ══ ENERGIA / VITALITÀ (arancione h=28) ══
+    ["Quanta energia hai oggi?","⚡",G(28)],
+    ["Quanto ti senti vitale?","🔥",G(28)],
+    ["Quanto sei carico/a?","💪",G(25)],
+    ["Quanta voglia di fare hai?","🚀",G(28)],
+    ["Quanto ti senti sveglio/a?","☀️",G(30)],
+    ["Quanta forza senti oggi?","🦁",G(25)],
+    ["Quanto sei dinamico/a oggi?","⚽",G(28)],
+    ["Quanta grinta hai?","🥊",G(25)],
+    ["Quanto ti senti attivo/a?","🏃",G(28)],
+    ["Quanta carica porti oggi?","🔋",G(30)],
+    ["Quanto il tuo motore gira?","🏎️",G(28)],
+    ["Quanta vitalità ti scorre dentro?","🌊",G(26)],
+    ["Quanto sei pronto/a ad affrontare la giornata?","🌄",G(28)],
+    ["Quanta spinta senti?","🎯",G(25)],
+    ["Quanto sei in forma oggi?","🤸",G(28)],
+    ["Quanta voglia di muoverti hai?","🎽",G(26)],
+    ["Quanta effervescenza senti?","🫧",G(28)],
+    ["Quanto ti senti inarrestabile?","🌊",G(25)],
+    ["Quanta vivacità hai oggi?","🦊",G(28)],
+    ["Quanto hai voglia di agire subito?","⚡",G(30)],
+
+    // ══ STRESS / ANSIA (rosso h=0) ══
+    ["Quanto ti senti stressato/a?","😤",G(0)],
+    ["Quanta ansia hai?","😰",G(5)],
+    ["Quanto sei teso/a?","😬",G(0)],
+    ["Quanta pressione senti?","🌋",G(5)],
+    ["Quanto ti senti sotto pressione?","⚠️",G(0)],
+    ["Quanta agitazione senti?","🌪️",G(3)],
+    ["Quanto sei preoccupato/a?","😟",G(5)],
+    ["Quanta tensione porti nel corpo?","💢",G(0)],
+    ["Quanto ti senti sopraffatto/a?","🌊",G(3)],
+    ["Quanta fretta senti oggi?","⏰",G(0)],
+    ["Quanto il futuro ti pesa?","☁️",G(3)],
+    ["Quanta inquietudine hai?","🫀",G(0)],
+    ["Quanto ti senti in trappola?","🔒",G(5)],
+    ["Quanta urgenza senti?","🚨",G(3)],
+    ["Quanto il pensiero corre senza fermarsi?","🌀",G(0)],
+
+    // ══ TRISTEZZA / MALINCONIA (blu h=220) ══
+    ["Quanto ti senti triste oggi?","🌧️",G(220,60)],
+    ["Quanta malinconia hai?","🌫️",G(225,55)],
+    ["Quanto ti senti giù?","🌑",G(220,60)],
+    ["Quanta nostalgia senti?","🕰️",G(225,55)],
+    ["Quanto ti manca qualcosa?","💭",G(220,60)],
+    ["Quanta solitudine senti?","🌙",G(225,55)],
+    ["Quanto ti senti vuoto/a?","🪨",G(220,60)],
+    ["Quanta pesantezza senti?","⚓",G(222,58)],
+    ["Quanto il grigio prevale?","🌁",G(220,40)],
+    ["Quanta distanza senti dalle cose?","🌌",G(225,55)],
+    ["Quanta rimpianti porti?","🍂",G(220,60)],
+    ["Quanto senti la mancanza di qualcuno?","💙",G(222,58)],
+    ["Quante lacrime hai dentro?","💧",G(225,55)],
+    ["Quanto il mondo sembra lontano?","🌊",G(220,60)],
+    ["Quanta malinconia dolce senti?","🌸",G(220,55)],
+
+    // ══ CALMA / RELAX (azzurro h=200) ══
+    ["Quanto sei calmo/a?","🌊",G(200)],
+    ["Quanta quiete senti?","🍃",G(200)],
+    ["Quanto ti senti rilassato/a?","😌",G(198)],
+    ["Quanta tranquillità hai?","🏔️",G(200)],
+    ["Quanto sei sereno/a?","🕊️",G(202)],
+    ["Quanta fluidità senti?","💧",G(200)],
+    ["Quanto sei in pace con il mondo?","🌿",G(198)],
+    ["Quanta dolcezza interiore senti?","🌸",G(200)],
+    ["Quanto ti senti equilibrato/a?","⚖️",G(200)],
+    ["Quanta stabilità porti oggi?","🪨",G(202)],
+    ["Quanto il silenzio ti fa bene?","🌅",G(200)],
+    ["Quanta lentezza ti piace oggi?","🐢",G(198)],
+    ["Quanto sei presente e disteso/a?","🏖️",G(200)],
+    ["Quanta quiete ti circonda?","🌾",G(202)],
+    ["Quanto il corpo è morbido e a riposo?","☁️",G(200)],
+
+    // ══ SONNO / RIPOSO (viola h=270) ══
+    ["Come hai dormito stanotte?","🌙",G(270)],
+    ["Quanto ti senti riposato/a?","😴",G(270)],
+    ["Quanto il sonno ti ha rigenerato?","✨",G(268)],
+    ["Quanta sonnolenza hai ancora?","🌛",G(272)],
+    ["Quanto ti senti fresco/a al risveglio?","🌅",G(270)],
+    ["Quanta stanchezza porti dal sonno?","😪",G(270)],
+    ["Quanti sogni ricordi?","💭",G(268)],
+    ["Quanto il riposo ha ricaricato le batterie?","🔋",G(272)],
+    ["Quanto profondo è stato il tuo sonno?","🌊",G(270)],
+    ["Quante ore avresti ancora voluto dormire?","⏰",G(270)],
+    ["Quanto hai avuto sonno ristoratore?","🛌",G(268)],
+    ["Quanto il sonno ti ha lasciato sogni vividi?","🌌",G(272)],
+    ["Quanta voglia di riaddormentarti hai?","😶",G(270)],
+    ["Quanto il sonno è stato un rifugio?","🏠",G(270)],
+    ["Quanto ti senti avvolto/a ancora dal sonno?","🌫️",G(268)],
+
+    // ══ FAME / APPETITO (verde-giallo h=80) ══
+    ["Quanta fame hai?","🍽️",G(80)],
+    ["Quanto hai voglia di mangiare?","🥗",G(78)],
+    ["Quanta soddisfazione ti dà il cibo oggi?","😋",G(80)],
+    ["Quanto il tuo appetito è vivo?","🌮",G(82)],
+    ["Quanta voglia di qualcosa di dolce hai?","🍫",G(78)],
+    ["Quanto ti senti sazio/a?","🫃",G(80)],
+    ["Quanta golosità senti?","🍕",G(80)],
+    ["Quanto il sapore conta per te oggi?","👅",G(78)],
+    ["Quanta curiosità culinaria hai?","🍳",G(82)],
+    ["Quanto il cibo ti fa sentire bene?","🥰",G(80)],
+    ["Quanta voglia di cucinare hai?","👨‍🍳",G(78)],
+    ["Quanto hai voglia di qualcosa di salato?","🧂",G(82)],
+    ["Quanta fame emotiva senti?","🍰",G(80)],
+    ["Quanto mangeresti in questo momento?","🤤",G(78)],
+    ["Quanta soddisfazione hai dall'ultimo pasto?","🍱",G(80)],
+
+    // ══ FOCUS / CONCENTRAZIONE (teal h=175) ══
+    ["Quanto riesci a concentrarti?","🎯",G(175)],
+    ["Quanta chiarezza mentale hai?","💎",G(175)],
+    ["Quanto sei focalizzato/a?","🔍",G(178)],
+    ["Quanta lucidità senti?","💡",G(175)],
+    ["Quanto il tuo pensiero è nitido?","🌐",G(172)],
+    ["Quanta precisione hai oggi?","🔬",G(175)],
+    ["Quanto riesci a stare nel presente?","🧘",G(178)],
+    ["Quanta attenzione puoi dedicare alle cose?","👁️",G(175)],
+    ["Quanto sei mentalmente presente?","🧠",G(172)],
+    ["Quanta determinazione mentale senti?","⚔️",G(175)],
+    ["Quanto il rumore mentale è basso?","🔇",G(178)],
+    ["Quanta chiarezza ha il tuo pensiero?","🔭",G(175)],
+    ["Quanto sei in grado di decidere oggi?","🧭",G(172)],
+    ["Quanta organizzazione senti?","📋",G(175)],
+    ["Quanto ti senti lucido/a e puntuale?","⏱️",G(178)],
+
+    // ══ CREATIVITÀ (viola h=290) ══
+    ["Quanto ti senti creativo/a?","🎨",G(290)],
+    ["Quanta ispirazione hai?","✨",G(288)],
+    ["Quanto la fantasia vola?","🦄",G(292)],
+    ["Quanta voglia di creare hai?","🖌️",G(290)],
+    ["Quanto sei in vena artistica?","🎭",G(288)],
+    ["Quante idee ti vengono?","💡",G(290)],
+    ["Quanto ti senti originale oggi?","🌈",G(292)],
+    ["Quanta immaginazione hai?","🌌",G(290)],
+    ["Quanto ti senti in flow creativo?","🌊",G(288)],
+    ["Quanta bellezza vedi intorno a te?","🌸",G(290)],
+    ["Quanto vedi le cose in modo nuovo?","🔮",G(292)],
+    ["Quanta voglia di inventare qualcosa hai?","⚗️",G(290)],
+    ["Quanto la musica ti ispira oggi?","🎵",G(288)],
+    ["Quanta curiosità intellettuale hai?","🧪",G(290)],
+    ["Quanto riesci a sorprenderti?","🌠",G(292)],
+
+    // ══ AMORE / CONNESSIONE (rosa h=340) ══
+    ["Quanto ti senti amato/a?","❤️",G(340)],
+    ["Quanta tenerezza senti?","🤗",G(342)],
+    ["Quanta dolcezza vuoi dare?","🌹",G(338)],
+    ["Quanto ti senti connesso/a agli altri?","🤝",G(340)],
+    ["Quanta voglia di abbracciare hai?","🫂",G(342)],
+    ["Quanto senti calore umano?","☀️",G(340)],
+    ["Quanta empatia hai oggi?","💞",G(338)],
+    ["Quanto ti senti vicino/a alla famiglia?","🏠",G(340)],
+    ["Quanta intimità cerchi oggi?","🕯️",G(342)],
+    ["Quanta voglia di condividere hai?","🫶",G(340)],
+    ["Quanto il cuore è aperto oggi?","💗",G(338)],
+    ["Quanta voglia di dire ti voglio bene hai?","💌",G(340)],
+    ["Quanto ti senti compreso/a dagli altri?","💟",G(342)],
+    ["Quanta tenerezza ricevi oggi?","🌷",G(340)],
+    ["Quanto ami ciò che ti circonda?","💝",G(338)],
+
+    // ══ FIDUCIA / AUTOSTIMA (dorato h=40) ══
+    ["Quanto ti senti sicuro/a di te?","🦁",G(40)],
+    ["Quanta fiducia in te stesso/a hai?","⭐",G(42)],
+    ["Quanto ti senti forte?","🏆",G(40)],
+    ["Quanta autostima senti?","👑",G(38)],
+    ["Quanto credi nelle tue capacità?","🎯",G(40)],
+    ["Quanta certezza hai?","🧭",G(42)],
+    ["Quanto ti senti capace?","💼",G(40)],
+    ["Quanto ti senti coraggioso/a?","🦅",G(38)],
+    ["Quanta chiarezza sui tuoi obiettivi hai?","🗺️",G(40)],
+    ["Quanto senti di essere sulla strada giusta?","🛤️",G(42)],
+    ["Quanta stima hai per te oggi?","🌟",G(40)],
+    ["Quanto ti senti orgoglioso/a?","🏅",G(38)],
+    ["Quanta fiducia nel tuo istinto hai?","🧿",G(40)],
+    ["Quanto ti senti meritevole?","✨",G(42)],
+    ["Quanto ti piaci oggi?","🪞",G(40)],
+
+    // ══ FRUSTRAZIONE / RABBIA (rosso scuro h=5) ══
+    ["Quanto ti senti arrabbiato/a?","😠",G(5,75)],
+    ["Quanta frustrazione hai?","😤",G(5,75)],
+    ["Quanto sei irritato/a?","🌋",G(3,75)],
+    ["Quanta impazienza senti?","⏱️",G(5,75)],
+    ["Quanto qualcosa ti ha disturbato?","🔴",G(3,75)],
+    ["Quanta rabbia c'è in te?","🥵",G(5,75)],
+    ["Quanto ti senti bloccato/a?","🚧",G(5,75)],
+    ["Quanta resistenza senti?","🌊",G(3,75)],
+    ["Quanto sei deluso/a?","😞",G(5,75)],
+    ["Quanta tensione senti verso qualcosa?","⚡",G(5,75)],
+    ["Quanta voglia di urlare hai?","📣",G(3,75)],
+    ["Quanto ti senti incompreso/a?","💔",G(5,75)],
+    ["Quanta voglia di cambiare le cose senti?","🔧",G(3,75)],
+    ["Quanto hai subìto un torto?","⚖️",G(5,75)],
+    ["Quanta stanchezza dal dover sopportare?","😮‍💨",G(5,75)],
+
+    // ══ BENESSERE FISICO (verde h=130) ══
+    ["Come stai fisicamente?","💚",G(130)],
+    ["Quanta salute senti nel corpo?","🌿",G(130)],
+    ["Quanto il tuo corpo ti supporta?","🏃",G(132)],
+    ["Quanta vitalità fisica hai?","💪",G(128)],
+    ["Quanto ti senti in forma?","🤸",G(130)],
+    ["Quanta leggerezza senti nel corpo?","🌬️",G(132)],
+    ["Quanto il corpo è a proprio agio?","🛋️",G(130)],
+    ["Quanta forza fisica senti?","🏋️",G(128)],
+    ["Quanto ti senti bene nella tua pelle?","🌺",G(130)],
+    ["Quanta energia corporea hai?","⚡",G(132)],
+    ["Quanto il corpo ti ringrazia oggi?","🫀",G(130)],
+    ["Quanta fluidità senti nei movimenti?","🌊",G(128)],
+    ["Quanto ti senti in armonia con il corpo?","🧘",G(130)],
+    ["Quanta cura hai dato al corpo oggi?","🛁",G(132)],
+    ["Quanto il corpo chiede riposo o movimento?","🏕️",G(130)],
+
+    // ══ SPERANZA / OTTIMISMO (verde-giallo h=75) ══
+    ["Quanta speranza hai?","🌱",G(75)],
+    ["Quanto sei ottimista?","🌈",G(75)],
+    ["Quanta fiducia nel futuro senti?","🔮",G(78)],
+    ["Quanto vedi il bicchiere mezzo pieno?","🥛",G(75)],
+    ["Quanta positività porti?","☀️",G(72)],
+    ["Quanto credi che andrà bene?","🤞",G(75)],
+    ["Quanta luce vedi avanti?","🕯️",G(78)],
+    ["Quanto il domani ti sembra bello?","🌅",G(75)],
+    ["Quanta voglia di futuro hai?","🚀",G(72)],
+    ["Quanto ti senti pronto/a per il domani?","🌠",G(75)],
+    ["Quanta fiducia nei cambiamenti hai?","🌊",G(78)],
+    ["Quanto senti che qualcosa di bello arriverà?","🌼",G(75)],
+    ["Quanta leggerezza porta il pensiero al futuro?","🕊️",G(72)],
+    ["Quanto credi nei tuoi sogni?","💫",G(75)],
+    ["Quanta apertura al nuovo senti?","🚪",G(78)],
+
+    // ══ MOTIVAZIONE (arancione-rosso h=20) ══
+    ["Quanta motivazione hai?","🎯",G(20)],
+    ["Quanto ti senti spinto/a ad agire?","🚀",G(18)],
+    ["Quanta voglia di raggiungere obiettivi hai?","🏆",G(20)],
+    ["Quanto sei determinato/a?","⚔️",G(22)],
+    ["Quanta spinta interiore senti?","🔥",G(20)],
+    ["Quanto vuoi cambiare qualcosa?","🌱",G(18)],
+    ["Quanta ambizione hai oggi?","🌟",G(20)],
+    ["Quanto il tuo fuoco interiore brucia?","🕯️",G(22)],
+    ["Quanta tenacia hai?","🦊",G(20)],
+    ["Quanto sei pronto/a a lottare per qualcosa?","🥊",G(18)],
+    ["Quanta voglia di metterti alla prova hai?","🧗",G(20)],
+    ["Quanto ti senti guidato/a da uno scopo?","🧭",G(22)],
+    ["Quanta voglia di fare la differenza hai?","🌍",G(20)],
+    ["Quanto ti senti in missione?","⚡",G(18)],
+    ["Quanta voglia di iniziare qualcosa di nuovo?","🌅",G(20)],
+
+    // ══ UMORE TIPO (spectrum EMO/SENS) ══
+    ["Qual è il tuo umore oggi?","🎭",EMO],
+    ["Che colore ha la tua giornata?","🎨",EMO],
+    ["Che sensazione prevale in te?","💭",SENS],
+    ["Qual è il tono emotivo di oggi?","🎼",EMO],
+    ["Che faccia ha la tua giornata?","😶",EMO],
+    ["Che sapore ha il tuo umore oggi?","👅",SENS],
+    ["Qual è la tua emozione dominante?","❓",EMO],
+    ["Che textura ha il tuo stato d'animo?","🖐️",SENS],
+    ["Qual è il colore del tuo cuore oggi?","💗",EMO],
+    ["Che musica suonerebbe il tuo umore?","🎵",SENS],
+    ["Che suono ha il tuo dentro oggi?","🔔",EMO],
+    ["A quale animale somiglia il tuo umore?","🦁",EMO],
+    ["A quale materiale somiglia il tuo stato?","💎",SENS],
+    ["Che movimento ha il tuo umore?","🌊",EMO],
+    ["Che peso ha il tuo umore oggi?","⚖️",SENS],
+    ["A quale strumento musicale sei oggi?","🎻",EMO],
+    ["Che tipo di luce sei oggi?","💡",SENS],
+    ["A quale stagione della vita somigli?","🍂",EMO],
+    ["Che tipo di silenzio hai dentro?","🤫",SENS],
+    ["A quale gesto somiglia il tuo stato?","🤲",EMO],
+
+    // ══ METEO INTERIORE (spectrum WEAT) ══
+    ["Che tempo fa dentro di te?","🌤️",WEAT],
+    ["Che cielo hai oggi?","☁️",WEAT],
+    ["Che meteo interiore porti?","🌈",WEAT],
+    ["Com'è l'atmosfera che senti?","🌫️",WEAT],
+    ["Che vento tira dentro di te?","🌬️",WEAT],
+    ["Quanto è soleggiato il tuo dentro?","☀️",WEAT],
+    ["Quanto è limpido il tuo cielo interiore?","🌥️",WEAT],
+    ["Che tipo di pioggia sei oggi?","🌧️",WEAT],
+    ["Quanto splende il tuo sole interiore?","🌞",WEAT],
+    ["Che nebbia o chiarezza hai?","🌁",WEAT],
+    ["Che temporale o bonaccia senti?","⛈️",WEAT],
+    ["A quale fenomeno atmosferico somigli?","🌪️",WEAT],
+    ["Che umidità o secchezza senti?","💧",WEAT],
+    ["Quanto il tuo cielo è in movimento?","🌀",WEAT],
+    ["Che tipo di nuvola sei oggi?","☁️",WEAT],
+
+    // ══ ELEMENTI NATURALI (spectrum ELEM) ══
+    ["A quale elemento della natura ti senti vicino?","🌿",ELEM],
+    ["Che forza della natura sei oggi?","🌊",ELEM],
+    ["A quale paesaggio somiglia la tua giornata?","🏞️",ELEM],
+    ["Che elemento ti rappresenta?","🔥",ELEM],
+    ["A quale fenomeno naturale somigli oggi?","🌋",ELEM],
+    ["Che materiale della terra sei?","🪨",ELEM],
+    ["A quale ecosistema appartieni oggi?","🌱",ELEM],
+    ["Che elemento primordiale senti dentro?","💨",ELEM],
+    ["A quale bioma somiglia il tuo umore?","🌵",ELEM],
+    ["Che ambiente naturale ti rispecchia?","🏔️",ELEM],
+
+    // ══ ORA DEL GIORNO (spectrum TIME) ══
+    ["A che ora del giorno somiglia il tuo umore?","🕐",TIME],
+    ["Che momento del giorno sei?","🌅",TIME],
+    ["In che fase della giornata ti senti?","🌇",TIME],
+    ["A che ora corrisponde la tua energia?","⏰",TIME],
+    ["Che alba o tramonto sei oggi?","🌄",TIME],
+    ["In quale momento vorresti stare?","🌙",TIME],
+    ["Che luce del giorno ti rappresenta?","💫",TIME],
+    ["A quale ora del giorno è più vivo il tuo dentro?","🌟",TIME],
+    ["Che ora sei nel ciclo della giornata?","🌒",TIME],
+    ["A quale momento del giorno ti aggrappi?","☀️",TIME],
+
+    // ══ STAGIONI (spectrum SEAS) ══
+    ["A che stagione somiglia la tua giornata?","🍂",SEAS],
+    ["Che stagione porta il tuo cuore oggi?","❄️",SEAS],
+    ["Che stagione rispecchia il tuo stato?","🌸",SEAS],
+    ["Che stagione del tuo cuore è oggi?","🍃",SEAS],
+    ["A quale stagione appartiene il tuo umore?","🌻",SEAS],
+    ["Che profumo di stagione senti?","🌺",SEAS],
+    ["In quale stagione si trova la tua energia?","⛄",SEAS],
+    ["Che stagione ti mancherebbe di più?","🍁",SEAS],
+    ["A quale stagione vuoi tornare?","🌊",SEAS],
+    ["Che stagione stai attraversando interiormente?","🌱",SEAS],
+
+    // ══ CORPO E SENSAZIONI (spectrum BODY) ══
+    ["Dove senti di più le emozioni nel corpo?","🫀",BODY],
+    ["Che sensazione fisica prevale?","🖐️",BODY],
+    ["Che segnale ti manda il corpo?","📡",BODY],
+    ["Che tensione o leggerezza senti nel corpo?","💆",BODY],
+    ["Dove si concentra la tua energia fisica?","⚡",BODY],
+    ["Che ritmo ha il tuo corpo oggi?","💓",BODY],
+    ["Che temperatura senti nel corpo?","🌡️",BODY],
+    ["Che bisogno fisico senti?","🛌",BODY],
+    ["Come si muove il tuo corpo oggi?","🤸",BODY],
+    ["Che zona del corpo ha più voce?","🗣️",BODY],
+
+    // ══ SOGNI / FANTASIA (spectrum DREAM) ══
+    ["A quale mondo fantastico appartieni oggi?","🌙",DREAM],
+    ["Che sogno vorresti fare stanotte?","💭",DREAM],
+    ["In quale universo vorresti vivere oggi?","🌌",DREAM],
+    ["A quale magia credi oggi?","✨",DREAM],
+    ["Che viaggio immaginario faresti?","🗺️",DREAM],
+    ["In quale tempo vorresti stare?","⏳",DREAM],
+    ["Che personaggio di una storia sei oggi?","🎭",DREAM],
+    ["Che sogno ad occhi aperti hai?","☁️",DREAM],
+    ["A quale mondo parallelo appartieni oggi?","🔮",DREAM],
+    ["Che mistero ti affascina oggi?","🌀",DREAM],
+
+    // ══ RELAZIONI SOCIALI (spectrum SOC) ══
+    ["Come ti senti nelle relazioni oggi?","🤝",SOC],
+    ["Quanto vuoi stare con gli altri?","👫",SOC],
+    ["Che ruolo senti di avere nel gruppo oggi?","👥",SOC],
+    ["Quanto ti senti aperto/a al mondo?","🌍",SOC],
+    ["Come ti avvicineresti agli altri oggi?","🚪",SOC],
+    ["Che tipo di connessione cerchi?","🔗",SOC],
+    ["Quanto il mondo esterno ti interessa?","🌐",SOC],
+    ["Quanto ti senti parte di qualcosa di grande?","🌊",SOC],
+    ["Che tipo di energia porti in una stanza?","💫",SOC],
+    ["Quanto hai bisogno di solitudine o compagnia?","🏝️",SOC],
+
+    // ══ CREATIVITÀ TIPO (spectrum CREA) ══
+    ["Quale forma d'arte ti rappresenta oggi?","🎨",CREA],
+    ["Che tipo di bellezza ti colpisce?","🌺",CREA],
+    ["In quale medium esprimeresti il tuo umore?","🖌️",CREA],
+    ["Che genere musicale sei oggi?","🎸",CREA],
+    ["A quale opera d'arte somiglia la tua giornata?","🖼️",CREA],
+    ["Che tipo di storia racconteresti oggi?","📚",CREA],
+    ["Che danza farebbe il tuo corpo?","💃",CREA],
+    ["Quale poesia ti rispecchia oggi?","✍️",CREA],
+    ["Che canzone descrive la tua giornata?","🎵",CREA],
+    ["A quale capolavoro somigli oggi?","🏛️",CREA],
+  ];
+
+  return T.map(([q,emoji,pal]) => ({q,emoji,pal}));
+})();
+
+/* ═══════════════════════════════════════
+   CANVAS
+═══════════════════════════════════════ */
+function drawArtwork(canvas, entries, upToDate=null) {
+  const W=1200, H=1200;
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext("2d");
+
+  let dates = Object.keys(entries).sort();
+  if(upToDate) dates = dates.filter(d => d <= upToDate);
+  if(dates.length===0) return;
+
+  // Deep dark background — makes colors glow
+  ctx.fillStyle="#0d0d14";
+  ctx.fillRect(0,0,W,H);
+
+  // Helper: smooth random cubic bezier path
+  function fluidPath(ctx, x0,y0, rng, size){
+    const cp1x = x0+(rng()-0.5)*size*2;
+    const cp1y = y0+(rng()-0.5)*size*2;
+    const cp2x = x0+(rng()-0.5)*size*2;
+    const cp2y = y0+(rng()-0.5)*size*2;
+    const x1   = x0+(rng()-0.5)*size*1.5;
+    const y1   = y0+(rng()-0.5)*size*1.5;
+    ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,x1,y1);
+    return [x1,y1];
+  }
+
+  dates.forEach((date) => {
+    const colors = Object.values(entries[date]);
+    const rng = seededRng(hashStr(date));
+
+    colors.forEach((color) => {
+      const cx = rng()*W;
+      const cy = rng()*H;
+      const size = 60 + rng()*220;
+
+      // ── 1. LARGE FLUID BLOB (Image 1 & 2 style) ──
+      for(let layer=0; layer<3; layer++){
+        const r = size*(1.4-layer*0.3);
+        const offsetX = (rng()-0.5)*30;
+        const offsetY = (rng()-0.5)*30;
+        const grad = ctx.createRadialGradient(
+          cx+offsetX, cy+offsetY, r*0.05,
+          cx+offsetX, cy+offsetY, r
+        );
+        grad.addColorStop(0, color);
+        grad.addColorStop(0.5, color+"cc");
+        grad.addColorStop(1, color+"00");
+        ctx.globalAlpha = 0.18 + rng()*0.28 - layer*0.05;
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        // organic blob shape via many bezier points
+        const pts = 7+Math.floor(rng()*5);
+        const startA = rng()*Math.PI*2;
+        for(let i=0;i<=pts;i++){
+          const a = startA + (i/pts)*Math.PI*2;
+          const wobble = 0.55 + rng()*0.9;
+          const px = cx + Math.cos(a)*r*wobble + (rng()-0.5)*r*0.3;
+          const py = cy + Math.sin(a)*r*wobble + (rng()-0.5)*r*0.3;
+          i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // ── 2. SWIRLING RIBBON stroke (Image 1 style) ──
+      const numRibbons = 2+Math.floor(rng()*3);
+      for(let rb=0;rb<numRibbons;rb++){
+        ctx.beginPath();
+        let rx = cx+(rng()-0.5)*size;
+        let ry = cy+(rng()-0.5)*size;
+        ctx.moveTo(rx,ry);
+        const ribbonLen = 3+Math.floor(rng()*6);
+        const ribbonSize = size*(0.5+rng()*0.8);
+        for(let s=0;s<ribbonLen;s++){
+          [rx,ry] = fluidPath(ctx, rx,ry, rng, ribbonSize);
+        }
+        const ribbonGrad = ctx.createLinearGradient(cx-size,cy,cx+size,cy);
+        ribbonGrad.addColorStop(0, color+"00");
+        ribbonGrad.addColorStop(0.3, color+"ee");
+        ribbonGrad.addColorStop(0.7, color+"ee");
+        ribbonGrad.addColorStop(1, color+"00");
+        ctx.globalAlpha = 0.45+rng()*0.45;
+        ctx.strokeStyle = ribbonGrad;
+        ctx.lineWidth = 4+rng()*28;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+      }
+
+      // ── 3. BOLD OVAL BLOBS (Image 4 style) ──
+      const numBlobs = 3+Math.floor(rng()*8);
+      for(let b=0;b<numBlobs;b++){
+        const bx = cx+(rng()-0.5)*size*2.5;
+        const by = cy+(rng()-0.5)*size*2.5;
+        const bw = 8+rng()*55;
+        const bh = bw*(0.4+rng()*1.2);
+        const ba = rng()*Math.PI*2;
+        ctx.save();
+        ctx.translate(bx,by);
+        ctx.rotate(ba);
+        ctx.globalAlpha = 0.65+rng()*0.35;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(0,0,bw,bh,0,0,Math.PI*2);
+        ctx.fill();
+        // thin bright outline
+        ctx.globalAlpha = 0.25+rng()*0.2;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 0.5+rng()*1.5;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // ── 4. IMPASTO bright highlight ──
+      ctx.globalAlpha = 0.8+rng()*0.2;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(cx+(rng()-0.5)*size*0.3, cy+(rng()-0.5)*size*0.3, 3+rng()*12, 0, Math.PI*2);
+      ctx.fill();
+    });
+  });
+
+  ctx.globalAlpha=1;
+
+  // Soft inner glow vignette (keeps center alive)
+  const vgIn = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*0.42);
+  vgIn.addColorStop(0,"rgba(255,255,255,0.04)");
+  vgIn.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=vgIn; ctx.fillRect(0,0,W,H);
+
+  // Edge vignette
+  const vg=ctx.createRadialGradient(W/2,H/2,W*0.32,W/2,H/2,W*0.76);
+  vg.addColorStop(0,"rgba(0,0,0,0)");
+  vg.addColorStop(1,"rgba(0,0,0,0.65)");
+  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+
+  // Day label
+  if(dates.length>0){
+    ctx.globalAlpha=0.4;
+    ctx.fillStyle="#ffffff";
+    ctx.font="600 15px sans-serif";
+    ctx.textAlign="right";
+    ctx.fillText(`IRIS · giorno ${dates.length}`, W-24, H-22);
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ═══════════════════════════════════════
+   APP STATE
+═══════════════════════════════════════ */
+const MEMBERS=["Yeppe","Gaiuttula","Miky","Zovetta","Pop"];
+let state={
+  screen:"loading",
+  entries:{},
+  activeMember:null,
+  picked:null,
+  pickedIdx:null,
+  flash:false,
+  evoDay:null,
+};
+
+function setState(patch){
+  Object.assign(state,patch);
+  render();
+}
+
+/* ═══════════════════════════════════════
+   FIREBASE OPS
+═══════════════════════════════════════ */
+async function loadEntries(){
+  try{
+    const data=await fbGet("iris_entries");
+    if(data&&typeof data==="object") state.entries=data;
+  }catch(e){console.warn("Firebase load:",e);}
+}
+
+/* ═══════════════════════════════════════
+   RENDER
+═══════════════════════════════════════ */
+function render(){
+  const app=document.getElementById("app");
+  const s=state;
+  const today=todayStr();
+  const theme=THEMES[hashStr(today)%THEMES.length];
+  const todayEntries=s.entries[today]||{};
+  const totalDays=Object.keys(s.entries).length;
+  const totalColors=Object.values(s.entries).reduce((a,d)=>a+Object.keys(d).length,0);
+  const isGrad=theme.pal[0].startsWith("hsl");
+  const sortedDates=Object.keys(s.entries).sort();
+
+  if(s.screen==="loading"){
+    app.innerHTML=`<div class="card" style="text-align:center"><div class="spinner"></div></div>`;
+    return;
+  }
+
+  if(s.screen==="home"){
+    const memberBtns=MEMBERS.map(m=>{
+      const done=todayEntries[m];
+      const dotHtml=done?`<div class="dot" style="background:${done};box-shadow:0 0 8px ${done}"></div>`:"";
+      return `<button class="member-btn" onclick="startCheckin('${m}')" style="background:${done?done+"22":"rgba(255,255,255,0.55)"};border-color:${done?done+"88":"#b8d8ba"}">${dotHtml}${m}</button>`;
+    }).join("");
+    const progressDots=MEMBERS.map(m=>{
+      const c=todayEntries[m];
+      return `<div class="today-dot" title="${m}" style="background:${c||"#b8d8ba"};${c?`box-shadow:0 0 6px ${c}`:""}"></div>`;
+    }).join("");
+    const previewDots=theme.pal.map(c=>`<div class="preview-dot" style="background:${c}"></div>`).join("");
+    app.innerHTML=`
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+          <div class="logo logo-sm">IRIS</div>
+          <div class="stats-row">
+            <div class="stat"><span class="stat-num">${totalDays}</span><span class="stat-label">giorni</span></div>
+            <div class="stat"><span class="stat-num">${totalColors}</span><span class="stat-label">colori</span></div>
+          </div>
+        </div>
+        <div class="date-str">${fmtDate(today)}</div>
+        <div class="theme-block">
+          <span style="font-size:2.2rem;display:block;margin-bottom:8px">${theme.emoji}</span>
+          <span style="font-family:'Syne',sans-serif;font-size:1.08rem;font-weight:700;color:#1a2e1c;line-height:1.3">"${theme.q}"</span>
+          <div class="preview-dots">${previewDots}</div>
+          <div style="margin-top:8px;font-size:.72rem;color:#7a9a7c">${Object.keys(todayEntries).length}/${MEMBERS.length} risposte oggi</div>
+          <div class="today-dots">${progressDots}</div>
+        </div>
+        <span class="label" style="margin-bottom:10px">Chi sei?</span>
+        <div class="member-grid">${memberBtns}</div>
+        <div class="flex-row" style="margin-top:4px">
+          <button class="ghost-btn" style="flex:1" onclick="goCanvas()">Vedi il quadro →</button>
+          <button class="ghost-btn" style="padding:12px 14px" onclick="loadAndRefresh()">↻</button>
+        </div>
+        <div class="share-box">📱 Salva questa pagina nei preferiti del telefono per aprirla ogni giorno</div>
+      </div>`;
+    return;
+  }
+
+  if(s.screen==="checkin"){
+    const alreadyDone=s.entries[today]?.[s.activeMember];
+    const lum=colorLuminance(s.flash&&s.picked?s.picked:"#d4ead6");
+    const textOnFlash=lum>155?"#1a2e1c":"#f0f7f0";
+    const bg=s.flash&&s.picked?s.picked:"#d4ead6";
+    document.body.style.background=bg;
+    const swatches=theme.pal.map((c,i)=>{
+      const active=s.pickedIdx===i;
+      const sz=active?46:38;
+      return `<button class="swatch${active?" active":""}" onclick="pickColor('${c}',${i})" style="width:${sz}px;height:${sz}px;background:${c};box-shadow:${active?`0 0 14px ${c},0 0 28px ${c}66`:`0 2px 6px rgba(0,0,0,.12)`}"></button>`;
+    }).join("");
+    const confirmHtml=s.picked&&!alreadyDone?`
+      <div style="text-align:center">
+        <div style="width:52px;height:52px;border-radius:50%;background:${s.picked};margin:0 auto 16px;box-shadow:0 0 28px ${s.picked}99"></div>
+        <button class="btn" onclick="submitColor()">Conferma</button>
+      </div>`:alreadyDone?`
+      <div style="text-align:center">
+        <div style="width:72px;height:72px;border-radius:50%;background:${alreadyDone};margin:0 auto 16px;box-shadow:0 0 40px ${alreadyDone}88"></div>
+        <p style="color:#7a9a7c;font-size:.82rem;margin-bottom:20px">Hai già scelto il tuo colore oggi.</p>
+        <button class="btn" onclick="goCanvas()">Vedi il quadro →</button>
+      </div>`:"";
+    const gradLabels=isGrad&&!alreadyDone?`<div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:.65rem;color:#7a9a7c;letter-spacing:.08em;text-transform:uppercase"><span>← poco</span><span>molto →</span></div>`:"";
+    app.innerHTML=`
+      <div class="card" style="background:${s.flash?"rgba(255,255,255,0.18)":"rgba(240,250,241,0.85)"};border:${s.flash?"none":"1px solid #a8cfaa"}">
+        <button class="back-btn" style="color:${s.flash?textOnFlash+"aa":"#7a9a7c"}" onclick="goHome()">← torna</button>
+        <div style="text-align:center;margin-bottom:24px">
+          <p style="font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:${s.flash?textOnFlash+"99":"#7a9a7c"};margin-bottom:4px;font-family:'Syne',sans-serif;font-weight:600">${s.activeMember}</p>
+          <div style="font-size:2.8rem;margin-bottom:10px;line-height:1">${theme.emoji}</div>
+          <h2 style="font-family:'Syne',sans-serif;font-size:1.45rem;font-weight:700;color:${s.flash?textOnFlash:"#1a2e1c"};line-height:1.25;letter-spacing:-.02em">${theme.q}</h2>
+        </div>
+        ${!alreadyDone?`${gradLabels}<div class="palette7">${swatches}</div>`:``}
+        ${confirmHtml}
+      </div>`;
+    return;
+  }
+
+  if(s.screen==="canvas"){
+    document.body.style.background="";
+    const displayDay=s.evoDay!==null?s.evoDay:sortedDates.length-1;
+    const displayDate=sortedDates[displayDay];
+    const colorsOfDay=displayDate&&s.entries[displayDate]?Object.entries(s.entries[displayDate]).map(([m,c])=>`
+      <div style="text-align:center">
+        <div style="width:28px;height:28px;border-radius:50%;background:${c};margin:0 auto 4px;box-shadow:0 0 10px ${c}88"></div>
+        <span style="font-size:.62rem;color:#7a9a7c">${m}</span>
+      </div>`).join(""):"";
+    const sliderHtml=sortedDates.length>1?`
+      <div class="evo-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span class="label" style="margin-bottom:0">Evoluzione</span>
+          <span style="font-size:.72rem;color:#5a7a5c;font-weight:500">${s.evoDay===null?"quadro completo":fmtDate(displayDate)}</span>
+        </div>
+        <input type="range" min="0" max="${sortedDates.length-1}" value="${s.evoDay===null?sortedDates.length-1:s.evoDay}" oninput="setEvo(this.value,${sortedDates.length-1})"/>
+        <div style="display:flex;justify-content:space-between;font-size:.62rem;color:#7a9a7c;margin-top:4px">
+          <span>giorno 1</span>
+          <button onclick="setEvo(${sortedDates.length-1},${sortedDates.length-1})" style="background:none;border:none;color:#2d5a30;font-size:.7rem;font-family:'Syne',sans-serif;font-weight:600;cursor:pointer;letter-spacing:.06em;text-transform:uppercase;padding:0">${s.evoDay!==null?"→ completo":"✓ completo"}</button>
+          <span>oggi</span>
+        </div>
+      </div>`:"";
+    app.innerHTML=`
+      <div class="card card-wide">
+        <button class="back-btn" onclick="goHome()">← home</button>
+        <h2 class="logo" style="font-size:1.4rem;margin-bottom:4px">IRIS — il vostro quadro</h2>
+        <p class="sub">${totalDays>0?`${totalDays} ${totalDays===1?"giorno":"giorni"} · ${totalColors} colori depositati`:"Ancora nessun colore."}</p>
+        <canvas id="irisCanvas" class="canvas-wrap"></canvas>
+        ${sliderHtml}
+        ${colorsOfDay?`<div style="margin-bottom:20px"><span class="label" style="margin-bottom:8px">${s.evoDay===null?"Colori di oggi":"Colori di quel giorno"}</span><div style="display:flex;gap:10px;flex-wrap:wrap">${colorsOfDay}</div></div>`:""}
+        <button class="btn" onclick="goHome()">+ Aggiungi colori</button>
+      </div>`;
+    // Draw after DOM update
+    requestAnimationFrame(()=>{
+      const canvas=document.getElementById("irisCanvas");
+      if(!canvas) return;
+      if(sortedDates.length===0) return;
+      const upTo=s.evoDay!==null?sortedDates[Math.min(s.evoDay,sortedDates.length-1)]:null;
+      drawArtwork(canvas,s.entries,upTo);
+    });
+    return;
+  }
+}
+
+/* ═══════════════════════════════════════
+   ACTIONS
+═══════════════════════════════════════ */
+function startCheckin(member){
+  const today=todayStr();
+  const existing=state.entries[today]?.[member]||null;
+  setState({screen:"checkin",activeMember:member,picked:existing,pickedIdx:null,flash:false});
+}
+function pickColor(color,idx){setState({picked:color,pickedIdx:idx});}
+function goHome(){document.body.style.background="";setState({screen:"home",flash:false});}
+function goCanvas(){setState({screen:"canvas",evoDay:null});}
+function setEvo(val,max){
+  const v=parseInt(val);
+  setState({evoDay:v===max?null:v});
+}
+async function loadAndRefresh(){await loadEntries();render();}
+async function submitColor(){
+  const today=todayStr();
+  if(!state.picked) return;
+  const ne={...state.entries};
+  if(!ne[today]) ne[today]={};
+  ne[today]={...ne[today],[state.activeMember]:state.picked};
+  state.flash=true;
+  state.entries=ne;
+  render();
+  try{await fbSet("iris_entries",ne);}catch(e){console.warn("Firebase save:",e);}
+  setTimeout(()=>{state.flash=false;setState({screen:"canvas",evoDay:null});},900);
+}
+
+/* ═══════════════════════════════════════
+   BOOT
+═══════════════════════════════════════ */
+(async()=>{
+  render(); // show spinner
+  await loadEntries();
+  setState({screen:"home"});
+})();
+</script>
+</body>
+</html>
