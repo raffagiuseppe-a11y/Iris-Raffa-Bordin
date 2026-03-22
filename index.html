@@ -78,6 +78,27 @@ async function fbGet(path){const r=await fetch(`${DB}/${path}.json`);if(!r.ok)th
 async function fbSet(path,data){const r=await fetch(`${DB}/${path}.json`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});if(!r.ok)throw new Error("fbSet");return r.json();}
 
 /* ═══════════════════════════════════════
+   WEEK UTIL (global)
+═══════════════════════════════════════ */
+function getWeekKey(iso){
+  const d=new Date(iso+"T12:00:00");
+  const jan4=new Date(d.getFullYear(),0,4);
+  const w=Math.ceil(((d-jan4)/86400000+jan4.getDay()+1)/7);
+  return d.getFullYear()+"-W"+String(w).padStart(2,"0");
+}
+function getWeeksMap(entries, upToDate){
+  const dates=Object.keys(entries).sort().filter(d=>!upToDate||d<=upToDate);
+  const map={};
+  dates.forEach(date=>{
+    const wk=getWeekKey(date);
+    if(!map[wk]) map[wk]={colors:[],dates:[]};
+    Object.values(entries[date]).forEach(c=>map[wk].colors.push(c));
+    map[wk].dates.push(date);
+  });
+  return map;
+}
+
+/* ═══════════════════════════════════════
    DATA
 ═══════════════════════════════════════ */
 const THEMES = (() => {
@@ -498,139 +519,222 @@ function drawArtwork(canvas, entries, upToDate=null) {
   let dates = Object.keys(entries).sort();
   if(upToDate) dates = dates.filter(d => d <= upToDate);
 
-  // Always draw background so canvas is never transparent-black
-  ctx.fillStyle="#0d0d14";
+  // ── Background ──
+  ctx.fillStyle="#0a0a0f";
   ctx.fillRect(0,0,W,H);
-
   if(dates.length===0) return;
 
-  // Helper: smooth random cubic bezier path
-  function fluidPath(ctx, x0,y0, rng, size){
-    const cp1x = x0+(rng()-0.5)*size*2;
-    const cp1y = y0+(rng()-0.5)*size*2;
-    const cp2x = x0+(rng()-0.5)*size*2;
-    const cp2y = y0+(rng()-0.5)*size*2;
-    const x1   = x0+(rng()-0.5)*size*1.5;
-    const y1   = y0+(rng()-0.5)*size*1.5;
-    ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,x1,y1);
-    return [x1,y1];
-  }
+  // ── Build weeks map ──
+  const weeksMapRaw=getWeeksMap(entries, upToDate);
+  const weeksMap={};
+  Object.keys(weeksMapRaw).forEach(k=>weeksMap[k]=weeksMapRaw[k].colors);
+  const weekKeys=Object.keys(weeksMap).sort();
+  const totalWeeks=weekKeys.length;
 
-  dates.forEach((date) => {
-    const colors = Object.values(entries[date]);
-    const rng = seededRng(hashStr(date));
+  // ── Grid layout: 7 cols × 7 rows = 49 cells (covers ~43 weeks of 10 months) ──
+  const COLS=7, ROWS=7;
+  const GAP=8;
+  const cellW=(W-GAP*(COLS+1))/COLS;
+  const cellH=(H-GAP*(ROWS+1))/ROWS;
 
-    colors.forEach((color) => {
-      const cx = rng()*W;
-      const cy = rng()*H;
-      const size = 60 + rng()*220;
+  weekKeys.forEach((wk, wi)=>{
+    const col=wi%COLS;
+    const row=Math.floor(wi/COLS);
+    const cx=GAP+col*(cellW+GAP);
+    const cy=GAP+row*(cellH+GAP);
+    const colors=weeksMap[wk];
+    const rng=seededRng(hashStr(wk));
 
-      // ── 1. LARGE FLUID BLOB ──
-      for(let layer=0; layer<3; layer++){
-        const r = size*(1.4-layer*0.3);
-        const offsetX = (rng()-0.5)*30;
-        const offsetY = (rng()-0.5)*30;
-        const grad = ctx.createRadialGradient(
-          cx+offsetX, cy+offsetY, r*0.05,
-          cx+offsetX, cy+offsetY, r
-        );
-        // Use only solid color + globalAlpha — avoids invalid HSL+hex strings
-        grad.addColorStop(0, color);
-        grad.addColorStop(0.6, color);
-        grad.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.globalAlpha = 0.18 + rng()*0.28 - layer*0.05;
-        ctx.fillStyle = grad;
+    // Cell background — slightly lighter than canvas
+    ctx.fillStyle="#12121a";
+    ctx.beginPath();
+    ctx.roundRect(cx,cy,cellW,cellH,10);
+    ctx.fill();
+
+    // Clip to cell
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(cx,cy,cellW,cellH,10);
+    ctx.clip();
+
+    // ── Paint each color within the cell ──
+    colors.forEach(color=>{
+      const bx=cx+rng()*cellW;
+      const by=cy+rng()*cellH;
+      const size=18+rng()*Math.min(cellW,cellH)*0.55;
+
+      // Fluid blob
+      for(let layer=0;layer<3;layer++){
+        const r=size*(1.4-layer*0.3);
+        const grad=ctx.createRadialGradient(bx,by,r*0.05,bx,by,r);
+        grad.addColorStop(0,color);
+        grad.addColorStop(0.6,color);
+        grad.addColorStop(1,"rgba(0,0,0,0)");
+        ctx.globalAlpha=0.20+rng()*0.25-layer*0.04;
+        ctx.fillStyle=grad;
         ctx.beginPath();
-        // organic blob shape via many bezier points
-        const pts = 7+Math.floor(rng()*5);
-        const startA = rng()*Math.PI*2;
+        const pts=6+Math.floor(rng()*4);
+        const startA=rng()*Math.PI*2;
         for(let i=0;i<=pts;i++){
-          const a = startA + (i/pts)*Math.PI*2;
-          const wobble = 0.55 + rng()*0.9;
-          const px = cx + Math.cos(a)*r*wobble + (rng()-0.5)*r*0.3;
-          const py = cy + Math.sin(a)*r*wobble + (rng()-0.5)*r*0.3;
-          i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+          const a=startA+(i/pts)*Math.PI*2;
+          const wobble=0.5+rng()*0.9;
+          const px=bx+Math.cos(a)*r*wobble;
+          const py=by+Math.sin(a)*r*wobble;
+          i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
         }
         ctx.closePath();
         ctx.fill();
       }
 
-      // ── 2. SWIRLING RIBBON stroke (Image 1 style) ──
-      const numRibbons = 2+Math.floor(rng()*3);
+      // Ribbon stroke
+      const numRibbons=1+Math.floor(rng()*2);
       for(let rb=0;rb<numRibbons;rb++){
         ctx.beginPath();
-        let rx = cx+(rng()-0.5)*size;
-        let ry = cy+(rng()-0.5)*size;
+        let rx=bx+(rng()-0.5)*size;
+        let ry=by+(rng()-0.5)*size;
         ctx.moveTo(rx,ry);
-        const ribbonLen = 3+Math.floor(rng()*6);
-        const ribbonSize = size*(0.5+rng()*0.8);
-        for(let s=0;s<ribbonLen;s++){
-          [rx,ry] = fluidPath(ctx, rx,ry, rng, ribbonSize);
+        for(let s=0;s<3+Math.floor(rng()*3);s++){
+          const cp1x=rx+(rng()-0.5)*size*1.5;
+          const cp1y=ry+(rng()-0.5)*size*1.5;
+          const cp2x=rx+(rng()-0.5)*size*1.5;
+          const cp2y=ry+(rng()-0.5)*size*1.5;
+          rx=bx+(rng()-0.5)*size*1.2;
+          ry=by+(rng()-0.5)*size*1.2;
+          ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,rx,ry);
         }
-        // Use globalAlpha for fade, not string concat
-        ctx.globalAlpha = 0.45+rng()*0.45;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 4+rng()*28;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
+        ctx.globalAlpha=0.4+rng()*0.45;
+        ctx.strokeStyle=color;
+        ctx.lineWidth=2+rng()*10;
+        ctx.lineCap="round";
+        ctx.lineJoin="round";
         ctx.stroke();
       }
 
-      // ── 3. BOLD OVAL BLOBS (Image 4 style) ──
-      const numBlobs = 3+Math.floor(rng()*8);
+      // Oval splats
+      const numBlobs=2+Math.floor(rng()*5);
       for(let b=0;b<numBlobs;b++){
-        const bx = cx+(rng()-0.5)*size*2.5;
-        const by = cy+(rng()-0.5)*size*2.5;
-        const bw = 8+rng()*55;
-        const bh = bw*(0.4+rng()*1.2);
-        const ba = rng()*Math.PI*2;
+        const sx=bx+(rng()-0.5)*size*2;
+        const sy=by+(rng()-0.5)*size*2;
+        const bw=4+rng()*size*0.35;
+        const bh=bw*(0.35+rng()*1.1);
         ctx.save();
-        ctx.translate(bx,by);
-        ctx.rotate(ba);
-        ctx.globalAlpha = 0.65+rng()*0.35;
-        ctx.fillStyle = color;
+        ctx.translate(sx,sy);
+        ctx.rotate(rng()*Math.PI*2);
+        ctx.globalAlpha=0.6+rng()*0.4;
+        ctx.fillStyle=color;
         ctx.beginPath();
         ctx.ellipse(0,0,bw,bh,0,0,Math.PI*2);
         ctx.fill();
-        // thin bright outline
-        ctx.globalAlpha = 0.25+rng()*0.2;
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 0.5+rng()*1.5;
-        ctx.stroke();
         ctx.restore();
       }
 
-      // ── 4. IMPASTO bright highlight ──
-      ctx.globalAlpha = 0.8+rng()*0.2;
-      ctx.fillStyle = color;
+      // Bright core
+      ctx.globalAlpha=0.85+rng()*0.15;
+      ctx.fillStyle=color;
       ctx.beginPath();
-      ctx.arc(cx+(rng()-0.5)*size*0.3, cy+(rng()-0.5)*size*0.3, 3+rng()*12, 0, Math.PI*2);
+      ctx.arc(bx+(rng()-0.5)*8,by+(rng()-0.5)*8,2+rng()*6,0,Math.PI*2);
       ctx.fill();
     });
+
+    ctx.restore(); // end clip
+
+    // Cell border glow
+    ctx.globalAlpha=0.18;
+    ctx.strokeStyle="#ffffff";
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.roundRect(cx,cy,cellW,cellH,10);
+    ctx.stroke();
+
+    // Week number label (tiny, bottom-right of cell)
+    ctx.globalAlpha=0.22;
+    ctx.fillStyle="#ffffff";
+    ctx.font=`600 ${Math.floor(cellH*0.09)}px sans-serif`;
+    ctx.textAlign="right";
+    ctx.fillText("S"+(wi+1), cx+cellW-6, cy+cellH-5);
+
+    ctx.globalAlpha=1;
   });
 
-  ctx.globalAlpha=1;
-
-  // Soft inner glow vignette (keeps center alive)
-  const vgIn = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*0.42);
-  vgIn.addColorStop(0,"rgba(255,255,255,0.04)");
-  vgIn.addColorStop(1,"rgba(0,0,0,0)");
-  ctx.fillStyle=vgIn; ctx.fillRect(0,0,W,H);
-
-  // Edge vignette
-  const vg=ctx.createRadialGradient(W/2,H/2,W*0.32,W/2,H/2,W*0.76);
-  vg.addColorStop(0,"rgba(0,0,0,0)");
-  vg.addColorStop(1,"rgba(0,0,0,0.65)");
-  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
-
-  // Day label
-  if(dates.length>0){
-    ctx.globalAlpha=0.4;
+  // Empty cells (future weeks)
+  for(let i=totalWeeks;i<COLS*ROWS;i++){
+    const col=i%COLS;
+    const row=Math.floor(i/COLS);
+    const cx=GAP+col*(cellW+GAP);
+    const cy=GAP+row*(cellH+GAP);
+    ctx.globalAlpha=0.06;
     ctx.fillStyle="#ffffff";
-    ctx.font="600 15px sans-serif";
-    ctx.textAlign="right";
-    ctx.fillText(`IRIS · giorno ${dates.length}`, W-24, H-22);
+    ctx.beginPath();
+    ctx.roundRect(cx,cy,cellW,cellH,10);
+    ctx.fill();
+    ctx.globalAlpha=1;
   }
+
+  // Title watermark
+  ctx.globalAlpha=0.18;
+  ctx.fillStyle="#ffffff";
+  ctx.font="700 22px sans-serif";
+  ctx.textAlign="center";
+  ctx.fillText("IRIS · "+totalWeeks+" settiman"+(totalWeeks===1?"a":"e"), W/2, H-10);
+  ctx.globalAlpha=1;
+}
+/* ═══════════════════════════════════════
+   DRAW ZOOMED WEEK
+═══════════════════════════════════════ */
+function drawWeekZoomed(canvas, colors, weekKey){
+  const W=900, H=900;
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext("2d");
+  ctx.fillStyle="#0a0a0f";
+  ctx.fillRect(0,0,W,H);
+  if(!colors||colors.length===0) return;
+  const rng=seededRng(hashStr(weekKey));
+  colors.forEach(color=>{
+    const bx=60+rng()*(W-120);
+    const by=60+rng()*(H-120);
+    const size=50+rng()*180;
+    for(let layer=0;layer<3;layer++){
+      const r=size*(1.4-layer*0.3);
+      const grad=ctx.createRadialGradient(bx,by,r*0.05,bx,by,r);
+      grad.addColorStop(0,color); grad.addColorStop(0.6,color); grad.addColorStop(1,"rgba(0,0,0,0)");
+      ctx.globalAlpha=0.20+rng()*0.28-layer*0.05;
+      ctx.fillStyle=grad;
+      ctx.beginPath();
+      const pts=6+Math.floor(rng()*5); const startA=rng()*Math.PI*2;
+      for(let i=0;i<=pts;i++){
+        const a=startA+(i/pts)*Math.PI*2, wobble=0.5+rng()*0.9;
+        const px=bx+Math.cos(a)*r*wobble, py=by+Math.sin(a)*r*wobble;
+        i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+    for(let rb=0;rb<2+Math.floor(rng()*3);rb++){
+      ctx.beginPath();
+      let rx=bx+(rng()-0.5)*size, ry=by+(rng()-0.5)*size;
+      ctx.moveTo(rx,ry);
+      for(let s=0;s<4+Math.floor(rng()*4);s++){
+        const cp1x=rx+(rng()-0.5)*size*1.8, cp1y=ry+(rng()-0.5)*size*1.8;
+        const cp2x=rx+(rng()-0.5)*size*1.8, cp2y=ry+(rng()-0.5)*size*1.8;
+        rx=bx+(rng()-0.5)*size*1.4; ry=by+(rng()-0.5)*size*1.4;
+        ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,rx,ry);
+      }
+      ctx.globalAlpha=0.45+rng()*0.45; ctx.strokeStyle=color;
+      ctx.lineWidth=4+rng()*22; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.stroke();
+    }
+    for(let b=0;b<3+Math.floor(rng()*8);b++){
+      const sx=bx+(rng()-0.5)*size*2.5, sy=by+(rng()-0.5)*size*2.5;
+      const bw=5+rng()*size*0.4, bh=bw*(0.35+rng()*1.1);
+      ctx.save(); ctx.translate(sx,sy); ctx.rotate(rng()*Math.PI*2);
+      ctx.globalAlpha=0.65+rng()*0.35; ctx.fillStyle=color;
+      ctx.beginPath(); ctx.ellipse(0,0,bw,bh,0,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha=0.9+rng()*0.1; ctx.fillStyle=color;
+    ctx.beginPath(); ctx.arc(bx+(rng()-0.5)*15,by+(rng()-0.5)*15,3+rng()*10,0,Math.PI*2); ctx.fill();
+  });
+  const vg=ctx.createRadialGradient(W/2,H/2,W*0.32,W/2,H/2,W*0.76);
+  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.6)");
+  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
   ctx.globalAlpha=1;
 }
 
@@ -647,6 +751,7 @@ let state={
   flash:false,
   evoDay:null,
   fbStatus:"idle",
+  zoomedWeek:null,  // week key when a cell is tapped
 };
 
 function setState(patch){
@@ -727,6 +832,7 @@ function render(){
           <button class="ghost-btn" style="padding:12px 14px" onclick="loadAndRefresh()">↻</button>
         </div>
         <div class="share-box">📱 Salva questa pagina nei preferiti del telefono per aprirla ogni giorno</div>
+        <button onclick="setState({screen:'admin'})" style="background:none;border:none;color:#bbb;font-size:.65rem;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;width:100%;margin-top:8px;padding:4px">⚙ impostazioni</button>
         ${s.fbStatus&&s.fbStatus.startsWith("error")?`
           <div style="margin-top:10px;padding:12px 14px;background:#ffeaea;border:1px solid #f5c0c0;border-radius:12px;font-size:.75rem;color:#a03030;line-height:1.6">
             ⚠️ <strong>Firebase non raggiungibile</strong><br>
@@ -812,14 +918,103 @@ function render(){
         ${colorsOfDay?`<div style="margin-bottom:20px"><span class="label" style="margin-bottom:8px">${s.evoDay===null?"Colori di oggi":"Colori di quel giorno"}</span><div style="display:flex;gap:10px;flex-wrap:wrap">${colorsOfDay}</div></div>`:""}
         <button class="btn" onclick="goHome()">+ Aggiungi colori</button>
       </div>`;
-    // Draw after DOM update
+    // Draw after DOM update + add click handler for cell zoom
     requestAnimationFrame(()=>{
       const canvas=document.getElementById("irisCanvas");
       if(!canvas) return;
       if(sortedDates.length===0) return;
       const upTo=s.evoDay!==null?sortedDates[Math.min(s.evoDay,sortedDates.length-1)]:null;
       drawArtwork(canvas,s.entries,upTo);
+
+      // Click on canvas → detect which week cell was tapped
+      canvas.onclick=(e)=>{
+        const rect=canvas.getBoundingClientRect();
+        const scaleX=canvas.width/rect.width;
+        const scaleY=canvas.height/rect.height;
+        const mx=(e.clientX-rect.left)*scaleX;
+        const my=(e.clientY-rect.top)*scaleY;
+        const W=canvas.width, H=canvas.height;
+        const COLS=7, ROWS=7, GAP=8;
+        const cellW=(W-GAP*(COLS+1))/COLS;
+        const cellH=(H-GAP*(ROWS+1))/ROWS;
+        const col=Math.floor((mx-GAP)/(cellW+GAP));
+        const row=Math.floor((my-GAP)/(cellH+GAP));
+        if(col<0||col>=COLS||row<0||row>=ROWS) return;
+        const wkIdx=row*COLS+col;
+        const wm=getWeeksMap(s.entries,upTo);
+        const wkeys=Object.keys(wm).sort();
+        if(wkIdx<wkeys.length){
+          state.zoomedWeek=wkeys[wkIdx];
+          state.screen="week";
+          render();
+        }
+      };
     });
+    return;
+  }
+
+  // ── WEEK ZOOM ──
+  if(s.screen==="week"){
+    document.body.style.background="";
+    const wm=getWeeksMap(s.entries,null);
+    const wkeys=Object.keys(wm).sort();
+    const wkIdx=wkeys.indexOf(s.zoomedWeek);
+    const wkData=wm[s.zoomedWeek]||{colors:[],dates:[]};
+    const wNum=wkIdx+1;
+    const dateLabelList=wkData.dates.map(d=>{
+      const dt=new Date(d+"T12:00:00");
+      return dt.toLocaleDateString("it-IT",{weekday:"short",day:"numeric",month:"short"});
+    }).join(" · ");
+    const memberColors={};
+    wkData.dates.forEach(d=>{
+      const dayData=s.entries[d]||{};
+      Object.entries(dayData).forEach(([m,c])=>{
+        if(!memberColors[m]) memberColors[m]=[];
+        memberColors[m].push(c);
+      });
+    });
+    const memberDots=Object.entries(memberColors).map(([m,cols])=>{
+      const dots=cols.map(c=>`<div style="width:18px;height:18px;border-radius:50%;background:${c};box-shadow:0 0 8px ${c}88;flex-shrink:0"></div>`).join("");
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="font-size:.75rem;color:#7a9a7c;width:70px;flex-shrink:0">${m}</span>${dots}</div>`;
+    }).join("");
+    const prevBtn=wkIdx>0?`<button class="ghost-btn" style="padding:10px 14px" onclick="setState({zoomedWeek:'${wkeys[wkIdx-1]}',screen:'week'})">←</button>`:"";
+    const nextBtn=wkIdx<wkeys.length-1?`<button class="ghost-btn" style="padding:10px 14px" onclick="setState({zoomedWeek:'${wkeys[wkIdx+1]}',screen:'week'})">→</button>`:"";
+    app.innerHTML=`
+      <div class="card card-wide">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <button class="back-btn" onclick="setState({screen:'canvas'})">← quadro</button>
+          <div style="display:flex;gap:8px">${prevBtn}${nextBtn}</div>
+        </div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;letter-spacing:-.02em;margin-bottom:4px">Settimana ${wNum}</div>
+        <div style="font-size:.72rem;color:#7a9a7c;margin-bottom:16px">${dateLabelList}</div>
+        <canvas id="weekCanvas" style="width:100%;border-radius:16px;display:block;background:#0a0a0f;box-shadow:0 4px 24px rgba(60,100,64,.12);margin-bottom:16px"></canvas>
+        <div style="background:rgba(255,255,255,.45);border:1px solid #c8e0ca;border-radius:14px;padding:14px 16px">
+          <span class="label" style="margin-bottom:10px">Colori di questa settimana</span>
+          ${memberDots}
+        </div>
+      </div>`;
+    requestAnimationFrame(()=>{
+      const wc=document.getElementById("weekCanvas");
+      if(wc) drawWeekZoomed(wc, wkData.colors, s.zoomedWeek);
+    });
+    return;
+  }
+
+  // ── ADMIN / RESET ──
+  if(s.screen==="admin"){
+    app.innerHTML=`
+      <div class="card">
+        <button class="back-btn" onclick="setState({screen:'home'})">← home</button>
+        <h2 class="logo" style="font-size:1.3rem;margin-bottom:8px">Impostazioni</h2>
+        <p class="sub">Usa il reset per azzerare tutti i dati prima dell'avvio ufficiale di luglio.</p>
+        <div style="background:rgba(255,60,60,.06);border:1px solid #f5c0c0;border-radius:14px;padding:16px;margin-bottom:16px">
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.9rem;color:#a03030;margin-bottom:8px">⚠️ Reset completo</div>
+          <p style="font-size:.78rem;color:#7a4040;line-height:1.5;margin-bottom:12px">Cancella tutti i colori salvati su Firebase. Operazione irreversibile.</p>
+          <input id="resetPwd" type="password" placeholder="Password di sicurezza" style="width:100%;background:rgba(255,255,255,.7);border:1px solid #f5c0c0;border-radius:10px;padding:10px 12px;font-size:.88rem;color:#1a2e1c;outline:none;box-sizing:border-box;margin-bottom:8px"/>
+          <button onclick="doReset()" style="width:100%;background:#c03030;color:#fff;border:none;border-radius:12px;padding:12px;font-size:.88rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;letter-spacing:.04em;text-transform:uppercase">Resetta tutto</button>
+        </div>
+        <div style="font-size:.7rem;color:#ccc;text-align:center">Contatta chi gestisce IRIS per la password</div>
+      </div>`;
     return;
   }
 }
@@ -851,6 +1046,18 @@ async function submitColor(){
   render();
   try{await fbSet("iris_entries",ne);}catch(e){console.warn("Firebase save:",e);}
   setTimeout(()=>{state.flash=false;setState({screen:"canvas",evoDay:null});},900);
+}
+
+async function doReset(){
+  const pwd=document.getElementById("resetPwd");
+  if(!pwd||pwd.value!=="iris2025"){ alert("Password errata!"); return; }
+  if(!confirm("Sei sicuro? Tutti i colori verranno cancellati per sempre.")) return;
+  try{
+    await fbSet("iris_entries",null);
+    state.entries={};
+    alert("✅ Reset completato. IRIS è pronta per luglio!");
+    setState({screen:"home"});
+  }catch(e){ alert("Errore Firebase: "+e.message); }
 }
 
 /* ═══════════════════════════════════════
