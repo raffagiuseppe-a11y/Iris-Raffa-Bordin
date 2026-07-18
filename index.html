@@ -62,7 +62,13 @@ function hashStr(str){
   for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193);}
   return h>>>0;
 }
-function todayStr(){return new Date().toISOString().slice(0,10);}
+function todayStr(){
+  const d=new Date();
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 function fmtDate(iso){return new Date(iso+"T12:00:00").toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"long"});}
 function colorLuminance(col){
   if(!col)return 128;
@@ -689,7 +695,13 @@ async function submitColor(){
   state.flash=true;
   state.entries=ne;
   render();
-  try{await fbSet("iris_entries",ne);}catch(e){console.warn("Firebase save:",e);}
+  console.log(`[IRIS v2] Saving color for ${state.activeMember} on ${today}:`, state.picked);
+  try{
+    await fbSet("iris_entries",ne);
+    console.log(`[IRIS v2] ✅ Firebase save SUCCESS on ${today}`);
+  }catch(e){
+    console.error(`[IRIS v2] ❌ Firebase save FAILED on ${today}:`, e);
+  }
   setTimeout(()=>{state.flash=false;setState({screen:"canvas",evoDay:null});},900);
 }
 
@@ -716,4 +728,3 @@ async function doReset(){
 </script>
 </body>
 </html>
-Aggiorna domande v1
