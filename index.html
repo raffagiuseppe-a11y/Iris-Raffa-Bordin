@@ -28,7 +28,7 @@ body{min-height:100vh;background:#d4ead6;background-image:radial-gradient(ellips
 .stat{text-align:center;flex:1;background:rgba(255,255,255,0.5);border-radius:12px;padding:12px 8px;border:1px solid #c8e0ca;}
 .stat-num{font-family:'Syne',sans-serif;font-size:1.9rem;font-weight:800;color:#2d5a30;display:block;line-height:1;letter-spacing:-.04em;}
 .stat-label{font-size:.62rem;color:#7a9a7c;letter-spacing:.12em;text-transform:uppercase;font-weight:500;}
-.palette7{display:flex;gap:8px;justify-content:center;margin-bottom:24px;align-items:flex-end;}
+.palette7{display:flex;gap:6px;justify-content:center;margin:0 -12px 24px;align-items:flex-end;}
 .swatch{border-radius:50%;cursor:pointer;border:2px solid rgba(255,255,255,.4);transition:all .2s;outline:none;flex-shrink:0;}
 .swatch.active{border:3px solid #1a2e1c;transform:scale(1.2) translateY(-5px);}
 .canvas-wrap{width:100%;border-radius:16px;overflow:hidden;display:block;margin:12px auto;box-shadow:0 4px 24px rgba(60,100,64,.12);background:#0d0d14;min-height:200px;}
@@ -50,6 +50,8 @@ input[type=range]{width:100%;accent-color:#2d5a30;cursor:pointer;}
 <div id="app"><div class="card" style="text-align:center"><div class="spinner"></div></div></div>
 
 <script>
+const MEMBERS=["Yeppe","Gaiuttula","Miky","Zovetta","Pop"];
+
 /* ═══════════════════════════════════════
    UTILS
 ═══════════════════════════════════════ */
@@ -84,42 +86,11 @@ async function fbGet(path){const r=await fetch(`${DB}/${path}.json`);if(!r.ok)th
 async function fbSet(path,data){const r=await fetch(`${DB}/${path}.json`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});if(!r.ok)throw new Error("fbSet");return r.json();}
 
 /* ═══════════════════════════════════════
-   WEEK UTIL (global)
-═══════════════════════════════════════ */
-function getWeekKey(iso){
-  const d=new Date(iso+"T12:00:00");
-  const jan4=new Date(d.getFullYear(),0,4);
-  const w=Math.ceil(((d-jan4)/86400000+jan4.getDay()+1)/7);
-  return d.getFullYear()+"-W"+String(w).padStart(2,"0");
-}
-function getWeeksMap(entries, upToDate){
-  const dates=Object.keys(entries).sort().filter(d=>!upToDate||d<=upToDate);
-  const map={};
-  dates.forEach(date=>{
-    const wk=getWeekKey(date);
-    if(!map[wk]) map[wk]={colors:[],dates:[]};
-    Object.values(entries[date]).forEach(c=>map[wk].colors.push(c));
-    map[wk].dates.push(date);
-  });
-  return map;
-}
-
-/* ═══════════════════════════════════════
    DATA
 ═══════════════════════════════════════ */
 const THEMES = (() => {
   const G = (h, s=68) => [90,78,66,54,42,30,18].map(l=>`hsl(${h},${s}%,${l}%)`);
 
-  const EMO  = ["#2a2a2a","#f0c840","#f07048","#5a88e0","#5ec868","#e058a0","#78d8c8"];
-  const WEAT = ["#ffe060","#a8d8f0","#5888c8","#383858","#e07050","#b0d8a8","#f8f8f8"];
-  const ELEM = ["#e07840","#58b8e8","#60c870","#e8d040","#8060c8","#c0c0c0","#181828"];
-  const TIME = ["#ffb060","#ffe090","#f0f0c0","#f8c860","#e09050","#9060c8","#181838"];
-  const SEAS = ["#f8e040","#60c870","#f07840","#5888c8","#f0a860","#b8e8f0","#e080b0"];
-  const BODY = ["#e85050","#e8a050","#e8d050","#60c860","#5888e8","#9850d0","#c0c0c0"];
-  const SENS = ["#e85050","#f09050","#f0d050","#98d870","#50b0e8","#8850e8","#d050e8"];
-  const DREAM= ["#180830","#482080","#7848c0","#c088e0","#e8b8f0","#f8f0fc","#fffafe"];
-  const SOC  = ["#e85080","#e8a050","#e8d050","#68c870","#5a8ce8","#a860d8","#808080"];
-  const CREA = ["#e83880","#f08030","#f8d030","#60c870","#3888e0","#9838d8","#38d8c8"];
 
           const T = [
     // === IRIS v7: 177 Domande (60 sel. + 17 nuove + 6 Pratchett + 49 Eliot + 45 Simpson) ===
@@ -308,237 +279,112 @@ const THEMES = (() => {
 /* ═══════════════════════════════════════
    CANVAS
 ═══════════════════════════════════════ */
-function drawArtwork(canvas, entries, upToDate=null) {
-  const W=1200, H=1200;
-  canvas.width=W; canvas.height=H;
-  const ctx=canvas.getContext("2d");
+function paintStroke(ctx, color, rng, W, H){
+  const bx=W*0.1+rng()*W*0.8;
+  const by=H*0.1+rng()*H*0.8;
+  const size=50+rng()*W*0.14;
 
-  let dates = Object.keys(entries).sort();
-  if(upToDate) dates = dates.filter(d => d <= upToDate);
-
-  // ── Background ──
-  ctx.fillStyle="#0a0a0f";
-  ctx.fillRect(0,0,W,H);
-  if(dates.length===0) return;
-
-  // ── Build weeks map ──
-  const weeksMapRaw=getWeeksMap(entries, upToDate);
-  const weeksMap={};
-  Object.keys(weeksMapRaw).forEach(k=>weeksMap[k]=weeksMapRaw[k].colors);
-  const weekKeys=Object.keys(weeksMap).sort();
-  const totalWeeks=weekKeys.length;
-
-  // ── Grid layout: 7 cols × 7 rows = 49 cells (covers ~43 weeks of 10 months) ──
-  const COLS=7, ROWS=7;
-  const GAP=8;
-  const cellW=(W-GAP*(COLS+1))/COLS;
-  const cellH=(H-GAP*(ROWS+1))/ROWS;
-
-  weekKeys.forEach((wk, wi)=>{
-    const col=wi%COLS;
-    const row=Math.floor(wi/COLS);
-    const cx=GAP+col*(cellW+GAP);
-    const cy=GAP+row*(cellH+GAP);
-    const colors=weeksMap[wk];
-    const rng=seededRng(hashStr(wk));
-
-    // Cell background — slightly lighter than canvas
-    ctx.fillStyle="#12121a";
+  // Fluid blob
+  for(let layer=0;layer<3;layer++){
+    const r=size*(1.4-layer*0.3);
+    // Cerchio con sfumatura che arriva a zero sul bordo: nessun bordo visibile in stampa
+    const outer=r*1.45;
+    const grad=ctx.createRadialGradient(bx,by,r*0.05,bx,by,outer);
+    grad.addColorStop(0,color);
+    grad.addColorStop(0.6,color);
+    grad.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.globalAlpha=0.20+rng()*0.25-layer*0.04;
+    ctx.fillStyle=grad;
     ctx.beginPath();
-    ctx.roundRect(cx,cy,cellW,cellH,10);
+    ctx.arc(bx,by,outer,0,Math.PI*2);
     ctx.fill();
-
-    // Clip to cell
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(cx,cy,cellW,cellH,10);
-    ctx.clip();
-
-    // ── Paint each color within the cell ──
-    colors.forEach(color=>{
-      const bx=cx+rng()*cellW;
-      const by=cy+rng()*cellH;
-      const size=18+rng()*Math.min(cellW,cellH)*0.55;
-
-      // Fluid blob
-      for(let layer=0;layer<3;layer++){
-        const r=size*(1.4-layer*0.3);
-        const grad=ctx.createRadialGradient(bx,by,r*0.05,bx,by,r);
-        grad.addColorStop(0,color);
-        grad.addColorStop(0.6,color);
-        grad.addColorStop(1,"rgba(0,0,0,0)");
-        ctx.globalAlpha=0.20+rng()*0.25-layer*0.04;
-        ctx.fillStyle=grad;
-        ctx.beginPath();
-        const pts=6+Math.floor(rng()*4);
-        const startA=rng()*Math.PI*2;
-        for(let i=0;i<=pts;i++){
-          const a=startA+(i/pts)*Math.PI*2;
-          const wobble=0.5+rng()*0.9;
-          const px=bx+Math.cos(a)*r*wobble;
-          const py=by+Math.sin(a)*r*wobble;
-          i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
-        }
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // Ribbon stroke
-      const numRibbons=1+Math.floor(rng()*2);
-      for(let rb=0;rb<numRibbons;rb++){
-        ctx.beginPath();
-        let rx=bx+(rng()-0.5)*size;
-        let ry=by+(rng()-0.5)*size;
-        ctx.moveTo(rx,ry);
-        for(let s=0;s<3+Math.floor(rng()*3);s++){
-          const cp1x=rx+(rng()-0.5)*size*1.5;
-          const cp1y=ry+(rng()-0.5)*size*1.5;
-          const cp2x=rx+(rng()-0.5)*size*1.5;
-          const cp2y=ry+(rng()-0.5)*size*1.5;
-          rx=bx+(rng()-0.5)*size*1.2;
-          ry=by+(rng()-0.5)*size*1.2;
-          ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,rx,ry);
-        }
-        ctx.globalAlpha=0.4+rng()*0.45;
-        ctx.strokeStyle=color;
-        ctx.lineWidth=2+rng()*10;
-        ctx.lineCap="round";
-        ctx.lineJoin="round";
-        ctx.stroke();
-      }
-
-      // Oval splats
-      const numBlobs=2+Math.floor(rng()*5);
-      for(let b=0;b<numBlobs;b++){
-        const sx=bx+(rng()-0.5)*size*2;
-        const sy=by+(rng()-0.5)*size*2;
-        const bw=4+rng()*size*0.35;
-        const bh=bw*(0.35+rng()*1.1);
-        ctx.save();
-        ctx.translate(sx,sy);
-        ctx.rotate(rng()*Math.PI*2);
-        ctx.globalAlpha=0.6+rng()*0.4;
-        ctx.fillStyle=color;
-        ctx.beginPath();
-        ctx.ellipse(0,0,bw,bh,0,0,Math.PI*2);
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // Bright core
-      ctx.globalAlpha=0.85+rng()*0.15;
-      ctx.fillStyle=color;
-      ctx.beginPath();
-      ctx.arc(bx+(rng()-0.5)*8,by+(rng()-0.5)*8,2+rng()*6,0,Math.PI*2);
-      ctx.fill();
-    });
-
-    ctx.restore(); // end clip
-
-    // Cell border glow
-    ctx.globalAlpha=0.18;
-    ctx.strokeStyle="#ffffff";
-    ctx.lineWidth=1;
-    ctx.beginPath();
-    ctx.roundRect(cx,cy,cellW,cellH,10);
-    ctx.stroke();
-
-    // Week number label (tiny, bottom-right of cell)
-    ctx.globalAlpha=0.22;
-    ctx.fillStyle="#ffffff";
-    ctx.font=`600 ${Math.floor(cellH*0.09)}px sans-serif`;
-    ctx.textAlign="right";
-    ctx.fillText("S"+(wi+1), cx+cellW-6, cy+cellH-5);
-
-    ctx.globalAlpha=1;
-  });
-
-  // Empty cells (future weeks)
-  for(let i=totalWeeks;i<COLS*ROWS;i++){
-    const col=i%COLS;
-    const row=Math.floor(i/COLS);
-    const cx=GAP+col*(cellW+GAP);
-    const cy=GAP+row*(cellH+GAP);
-    ctx.globalAlpha=0.06;
-    ctx.fillStyle="#ffffff";
-    ctx.beginPath();
-    ctx.roundRect(cx,cy,cellW,cellH,10);
-    ctx.fill();
-    ctx.globalAlpha=1;
   }
 
-  // Title watermark
+  // Ribbon stroke
+  const numRibbons=1+Math.floor(rng()*2);
+  for(let rb=0;rb<numRibbons;rb++){
+    ctx.beginPath();
+    let rx=bx+(rng()-0.5)*size;
+    let ry=by+(rng()-0.5)*size;
+    ctx.moveTo(rx,ry);
+    for(let s=0;s<3+Math.floor(rng()*3);s++){
+      const cp1x=rx+(rng()-0.5)*size*1.5;
+      const cp1y=ry+(rng()-0.5)*size*1.5;
+      const cp2x=rx+(rng()-0.5)*size*1.5;
+      const cp2y=ry+(rng()-0.5)*size*1.5;
+      rx=bx+(rng()-0.5)*size*1.2;
+      ry=by+(rng()-0.5)*size*1.2;
+      ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,rx,ry);
+    }
+    ctx.globalAlpha=0.4+rng()*0.45;
+    ctx.strokeStyle=color;
+    ctx.lineWidth=2+rng()*10;
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+    ctx.stroke();
+  }
+
+  // Oval splats
+  const numBlobs=2+Math.floor(rng()*5);
+  for(let b=0;b<numBlobs;b++){
+    const sx=bx+(rng()-0.5)*size*2;
+    const sy=by+(rng()-0.5)*size*2;
+    const bw=4+rng()*size*0.35;
+    const bh=bw*(0.35+rng()*1.1);
+    ctx.save();
+    ctx.translate(sx,sy);
+    ctx.rotate(rng()*Math.PI*2);
+    ctx.globalAlpha=0.6+rng()*0.4;
+    ctx.fillStyle=color;
+    ctx.beginPath();
+    ctx.ellipse(0,0,bw,bh,0,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Bright core
+  ctx.globalAlpha=0.85+rng()*0.15;
+  ctx.fillStyle=color;
+  ctx.beginPath();
+  ctx.arc(bx+(rng()-0.5)*8,by+(rng()-0.5)*8,2+rng()*6,0,Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha=1;
+}
+
+// Un unico quadro continuo: una pennellata per ogni colore depositato,
+// in ordine di data e di persona. Ogni pennellata usa un seme fisso
+// (data|persona), quindi il quadro non cambia quando si aggiungono colori.
+function drawArtwork(canvas, entries, upToDate=null, size=1200) {
+  const W=1200, H=1200;
+  canvas.width=size; canvas.height=size;
+  const ctx=canvas.getContext("2d");
+  ctx.setTransform(size/W,0,0,size/H,0,0); // disegno in coordinate base 1200, scalato alla dimensione richiesta
+
+  ctx.fillStyle="#0a0a0f";
+  ctx.fillRect(0,0,W,H);
+
+  const strokes=[];
+  Object.keys(entries).sort().filter(d=>!upToDate||d<=upToDate).forEach(date=>{
+    MEMBERS.forEach(m=>{
+      const c=entries[date]?.[m];
+      if(c) strokes.push({date,member:m,color:c});
+    });
+  });
+
+  strokes.forEach(st=>{
+    paintStroke(ctx, st.color, seededRng(hashStr(st.date+"|"+st.member)), W, H);
+  });
+
   ctx.globalAlpha=0.18;
   ctx.fillStyle="#ffffff";
   ctx.font="700 22px sans-serif";
   ctx.textAlign="center";
-  ctx.fillText("IRIS · "+totalWeeks+" settiman"+(totalWeeks===1?"a":"e"), W/2, H-10);
+  ctx.fillText("IRIS · "+strokes.length+" colori", W/2, H-10);
   ctx.globalAlpha=1;
 }
-/* ═══════════════════════════════════════
-   DRAW ZOOMED WEEK
-═══════════════════════════════════════ */
-function drawWeekZoomed(canvas, colors, weekKey){
-  const W=900, H=900;
-  canvas.width=W; canvas.height=H;
-  const ctx=canvas.getContext("2d");
-  ctx.fillStyle="#0a0a0f";
-  ctx.fillRect(0,0,W,H);
-  if(!colors||colors.length===0) return;
-  const rng=seededRng(hashStr(weekKey));
-  colors.forEach(color=>{
-    const bx=60+rng()*(W-120);
-    const by=60+rng()*(H-120);
-    const size=50+rng()*180;
-    for(let layer=0;layer<3;layer++){
-      const r=size*(1.4-layer*0.3);
-      const grad=ctx.createRadialGradient(bx,by,r*0.05,bx,by,r);
-      grad.addColorStop(0,color); grad.addColorStop(0.6,color); grad.addColorStop(1,"rgba(0,0,0,0)");
-      ctx.globalAlpha=0.20+rng()*0.28-layer*0.05;
-      ctx.fillStyle=grad;
-      ctx.beginPath();
-      const pts=6+Math.floor(rng()*5); const startA=rng()*Math.PI*2;
-      for(let i=0;i<=pts;i++){
-        const a=startA+(i/pts)*Math.PI*2, wobble=0.5+rng()*0.9;
-        const px=bx+Math.cos(a)*r*wobble, py=by+Math.sin(a)*r*wobble;
-        i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
-      }
-      ctx.closePath(); ctx.fill();
-    }
-    for(let rb=0;rb<2+Math.floor(rng()*3);rb++){
-      ctx.beginPath();
-      let rx=bx+(rng()-0.5)*size, ry=by+(rng()-0.5)*size;
-      ctx.moveTo(rx,ry);
-      for(let s=0;s<4+Math.floor(rng()*4);s++){
-        const cp1x=rx+(rng()-0.5)*size*1.8, cp1y=ry+(rng()-0.5)*size*1.8;
-        const cp2x=rx+(rng()-0.5)*size*1.8, cp2y=ry+(rng()-0.5)*size*1.8;
-        rx=bx+(rng()-0.5)*size*1.4; ry=by+(rng()-0.5)*size*1.4;
-        ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,rx,ry);
-      }
-      ctx.globalAlpha=0.45+rng()*0.45; ctx.strokeStyle=color;
-      ctx.lineWidth=4+rng()*22; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.stroke();
-    }
-    for(let b=0;b<3+Math.floor(rng()*8);b++){
-      const sx=bx+(rng()-0.5)*size*2.5, sy=by+(rng()-0.5)*size*2.5;
-      const bw=5+rng()*size*0.4, bh=bw*(0.35+rng()*1.1);
-      ctx.save(); ctx.translate(sx,sy); ctx.rotate(rng()*Math.PI*2);
-      ctx.globalAlpha=0.65+rng()*0.35; ctx.fillStyle=color;
-      ctx.beginPath(); ctx.ellipse(0,0,bw,bh,0,0,Math.PI*2); ctx.fill();
-      ctx.restore();
-    }
-    ctx.globalAlpha=0.9+rng()*0.1; ctx.fillStyle=color;
-    ctx.beginPath(); ctx.arc(bx+(rng()-0.5)*15,by+(rng()-0.5)*15,3+rng()*10,0,Math.PI*2); ctx.fill();
-  });
-  const vg=ctx.createRadialGradient(W/2,H/2,W*0.32,W/2,H/2,W*0.76);
-  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.6)");
-  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
-  ctx.globalAlpha=1;
-}
-
 /* ═══════════════════════════════════════
    APP STATE
 ═══════════════════════════════════════ */
-const MEMBERS=["Yeppe","Gaiuttula","Miky","Zovetta","Pop"];
 let state={
   screen:"loading",
   entries:{},
@@ -559,15 +405,34 @@ function setState(patch){
 /* ═══════════════════════════════════════
    FIREBASE OPS
 ═══════════════════════════════════════ */
+// Solo i formati usati dalla palette: #rrggbb oppure hsl(h,s%,l%)
+const COLOR_RE=/^(#[0-9a-fA-F]{6}|hsl\([0-9]{1,3},[0-9]{1,3}%,[0-9]{1,3}%\))$/;
+// Tiene solo date valide, persone della lista e colori stringa di lunghezza ragionevole
+function sanitizeEntries(raw){
+  const out={};
+  Object.entries(raw||{}).forEach(([d,day])=>{
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!day||typeof day!=="object") return;
+    Object.entries(day).forEach(([m,c])=>{
+      if(!MEMBERS.includes(m)||typeof c!=="string"||!COLOR_RE.test(c)) return;
+      (out[d]=out[d]||{})[m]=c;
+    });
+  });
+  return out;
+}
 async function loadEntries(){
   state.fbStatus="loading";
   try{
     const data=await fbGet("iris_entries");
-    if(data&&typeof data==="object"){
-      state.entries=data;
+    if(data===null){
+      state.raw=null;
+      state.entries={};
+      state.fbStatus="empty"; // Firebase vuoto — nessun colore ancora
+    } else if(typeof data==="object"){
+      state.raw=data;
+      state.entries=sanitizeEntries(data);
       state.fbStatus="ok";
     } else {
-      state.fbStatus="empty"; // Firebase vuoto — nessun colore ancora
+      throw new Error("formato dati non valido");
     }
   }catch(e){
     console.warn("Firebase load:",e);
@@ -633,9 +498,9 @@ function render(){
         ${s.fbStatus&&s.fbStatus.startsWith("error")?`
           <div style="margin-top:10px;padding:12px 14px;background:#ffeaea;border:1px solid #f5c0c0;border-radius:12px;font-size:.75rem;color:#a03030;line-height:1.6">
             ⚠️ <strong>Firebase non raggiungibile</strong><br>
-            Vai su <strong>console.firebase.google.com</strong> → Realtime Database → Regole<br>
-            e assicurati che le regole siano:<br>
-            <code style="background:#fff3f3;padding:2px 6px;border-radius:4px;font-size:.7rem">".read":true, ".write":true</code>
+
+            Controlla la connessione e che le regole pubblicate siano quelle del file firebase_rules_iris.json.<br>
+            Non modificare le regole per far funzionare l'app.
           </div>`:""}
       </div>`;
     return;
@@ -649,7 +514,7 @@ function render(){
     document.body.style.background=bg;
     const swatches=theme.pal.map((c,i)=>{
       const active=s.pickedIdx===i;
-      const sz=active?46:38;
+      const sz=active?42:34;
       return `<button class="swatch${active?" active":""}" onclick="pickColor('${c}',${i})" style="width:${sz}px;height:${sz}px;background:${c};box-shadow:${active?`0 0 14px ${c},0 0 28px ${c}66`:`0 2px 6px rgba(0,0,0,.12)`}"></button>`;
     }).join("");
     const confirmHtml=s.picked&&!alreadyDone?`
@@ -712,10 +577,11 @@ function render(){
             <div style="font-size:.75rem;color:#7a9a7c;margin-top:6px">Torna alla home, scegli il tuo nome e aggiungi il primo colore!</div>
           </div>`:""}
         ${sliderHtml}
-        ${colorsOfDay?`<div style="margin-bottom:20px"><span class="label" style="margin-bottom:8px">${s.evoDay===null?"Colori di oggi":"Colori di quel giorno"}</span><div style="display:flex;gap:10px;flex-wrap:wrap">${colorsOfDay}</div></div>`:""}
+        ${colorsOfDay?`<div style="margin-bottom:20px"><span class="label" style="margin-bottom:8px">${s.evoDay===null?(displayDate===today?"Colori di oggi":"Ultimo giorno registrato"):"Colori di quel giorno"}</span><div style="display:flex;gap:10px;flex-wrap:wrap">${colorsOfDay}</div></div>`:""}
+        <button class="btn" style="background:#3d6b41" onclick="exportArtwork()">Esporta immagine PNG</button>
         <button class="btn" onclick="goHome()">+ Aggiungi colori</button>
       </div>`;
-    // Draw after DOM update + add click handler for cell zoom
+    // Draw after DOM update
     requestAnimationFrame(()=>{
       const canvas=document.getElementById("irisCanvas");
       if(!canvas) return;
@@ -723,76 +589,6 @@ function render(){
       const upTo=s.evoDay!==null?sortedDates[Math.min(s.evoDay,sortedDates.length-1)]:null;
       drawArtwork(canvas,s.entries,upTo);
 
-      // Click on canvas → detect which week cell was tapped
-      canvas.onclick=(e)=>{
-        const rect=canvas.getBoundingClientRect();
-        const scaleX=canvas.width/rect.width;
-        const scaleY=canvas.height/rect.height;
-        const mx=(e.clientX-rect.left)*scaleX;
-        const my=(e.clientY-rect.top)*scaleY;
-        const W=canvas.width, H=canvas.height;
-        const COLS=7, ROWS=7, GAP=8;
-        const cellW=(W-GAP*(COLS+1))/COLS;
-        const cellH=(H-GAP*(ROWS+1))/ROWS;
-        const col=Math.floor((mx-GAP)/(cellW+GAP));
-        const row=Math.floor((my-GAP)/(cellH+GAP));
-        if(col<0||col>=COLS||row<0||row>=ROWS) return;
-        const wkIdx=row*COLS+col;
-        const wm=getWeeksMap(s.entries,upTo);
-        const wkeys=Object.keys(wm).sort();
-        if(wkIdx<wkeys.length){
-          state.zoomedWeek=wkeys[wkIdx];
-          state.screen="week";
-          render();
-        }
-      };
-    });
-    return;
-  }
-
-  // ── WEEK ZOOM ──
-  if(s.screen==="week"){
-    document.body.style.background="";
-    const wm=getWeeksMap(s.entries,null);
-    const wkeys=Object.keys(wm).sort();
-    const wkIdx=wkeys.indexOf(s.zoomedWeek);
-    const wkData=wm[s.zoomedWeek]||{colors:[],dates:[]};
-    const wNum=wkIdx+1;
-    const dateLabelList=wkData.dates.map(d=>{
-      const dt=new Date(d+"T12:00:00");
-      return dt.toLocaleDateString("it-IT",{weekday:"short",day:"numeric",month:"short"});
-    }).join(" · ");
-    const memberColors={};
-    wkData.dates.forEach(d=>{
-      const dayData=s.entries[d]||{};
-      Object.entries(dayData).forEach(([m,c])=>{
-        if(!memberColors[m]) memberColors[m]=[];
-        memberColors[m].push(c);
-      });
-    });
-    const memberDots=Object.entries(memberColors).map(([m,cols])=>{
-      const dots=cols.map(c=>`<div style="width:18px;height:18px;border-radius:50%;background:${c};box-shadow:0 0 8px ${c}88;flex-shrink:0"></div>`).join("");
-      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="font-size:.75rem;color:#7a9a7c;width:70px;flex-shrink:0">${m}</span>${dots}</div>`;
-    }).join("");
-    const prevBtn=wkIdx>0?`<button class="ghost-btn" style="padding:10px 14px" onclick="setState({zoomedWeek:'${wkeys[wkIdx-1]}',screen:'week'})">←</button>`:"";
-    const nextBtn=wkIdx<wkeys.length-1?`<button class="ghost-btn" style="padding:10px 14px" onclick="setState({zoomedWeek:'${wkeys[wkIdx+1]}',screen:'week'})">→</button>`:"";
-    app.innerHTML=`
-      <div class="card card-wide">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <button class="back-btn" onclick="setState({screen:'canvas'})">← quadro</button>
-          <div style="display:flex;gap:8px">${prevBtn}${nextBtn}</div>
-        </div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;letter-spacing:-.02em;margin-bottom:4px">Settimana ${wNum}</div>
-        <div style="font-size:.72rem;color:#7a9a7c;margin-bottom:16px">${dateLabelList}</div>
-        <canvas id="weekCanvas" style="width:100%;border-radius:16px;display:block;background:#0a0a0f;box-shadow:0 4px 24px rgba(60,100,64,.12);margin-bottom:16px"></canvas>
-        <div style="background:rgba(255,255,255,.45);border:1px solid #c8e0ca;border-radius:14px;padding:14px 16px">
-          <span class="label" style="margin-bottom:10px">Colori di questa settimana</span>
-          ${memberDots}
-        </div>
-      </div>`;
-    requestAnimationFrame(()=>{
-      const wc=document.getElementById("weekCanvas");
-      if(wc) drawWeekZoomed(wc, wkData.colors, s.zoomedWeek);
     });
     return;
   }
@@ -803,14 +599,12 @@ function render(){
       <div class="card">
         <button class="back-btn" onclick="setState({screen:'home'})">← home</button>
         <h2 class="logo" style="font-size:1.3rem;margin-bottom:8px">Impostazioni</h2>
-        <p class="sub">Usa il reset per azzerare tutti i dati prima dell'avvio ufficiale di luglio.</p>
-        <div style="background:rgba(255,60,60,.06);border:1px solid #f5c0c0;border-radius:14px;padding:16px;margin-bottom:16px">
-          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.9rem;color:#a03030;margin-bottom:8px">⚠️ Reset completo</div>
-          <p style="font-size:.78rem;color:#7a4040;line-height:1.5;margin-bottom:12px">Cancella tutti i colori salvati su Firebase. Operazione irreversibile.</p>
-          <input id="resetPwd" type="password" placeholder="Password di sicurezza" style="width:100%;background:rgba(255,255,255,.7);border:1px solid #f5c0c0;border-radius:10px;padding:10px 12px;font-size:.88rem;color:#1a2e1c;outline:none;box-sizing:border-box;margin-bottom:8px"/>
-          <button onclick="doReset()" style="width:100%;background:#c03030;color:#fff;border:none;border-radius:12px;padding:12px;font-size:.88rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;letter-spacing:.04em;text-transform:uppercase">Resetta tutto</button>
+        <p class="sub">Backup e reset dei dati.</p>
+        <div style="background:rgba(60,120,255,.06);border:1px solid #b8d8ff;border-radius:14px;padding:16px;margin-bottom:16px">
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:.9rem;color:#2060c0;margin-bottom:8px">Backup dei dati</div>
+          <p style="font-size:.78rem;color:#4080a0;line-height:1.5;margin-bottom:12px">Scarica un file JSON con tutti i colori salvati.</p>
+          <button onclick="downloadBackup()" style="width:100%;background:#2060c0;color:#fff;border:none;border-radius:12px;padding:12px;font-size:.88rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;letter-spacing:.04em;text-transform:uppercase">Scarica backup</button>
         </div>
-        <div style="font-size:.7rem;color:#ccc;text-align:center">Contatta chi gestisce IRIS per la password</div>
       </div>`;
     return;
   }
@@ -819,14 +613,18 @@ function render(){
 /* ═══════════════════════════════════════
    ACTIONS
 ═══════════════════════════════════════ */
+let flashTimer=null;
+let saving=false;
+function cancelFlash(){ if(flashTimer){ clearTimeout(flashTimer); flashTimer=null; } }
 function startCheckin(member){
+  cancelFlash();
   const today=todayStr();
   const existing=state.entries[today]?.[member]||null;
   setState({screen:"checkin",activeMember:member,picked:existing,pickedIdx:null,flash:false});
 }
 function pickColor(color,idx){setState({picked:color,pickedIdx:idx});}
-function goHome(){document.body.style.background="";setState({screen:"home",flash:false});}
-function goCanvas(){setState({screen:"canvas",evoDay:null});}
+function goHome(){cancelFlash();document.body.style.background="";setState({screen:"home",flash:false});}
+function goCanvas(){cancelFlash();setState({screen:"canvas",evoDay:null});}
 function setEvo(val,max){
   const v=parseInt(val);
   setState({evoDay:v===max?null:v});
@@ -834,33 +632,77 @@ function setEvo(val,max){
 async function loadAndRefresh(){await loadEntries();render();}
 async function submitColor(){
   const today=todayStr();
-  if(!state.picked) return;
+  if(!state.picked||saving) return;
+  if(state.fbStatus!=="ok" && state.fbStatus!=="empty"){
+    alert("Non riesco a leggere il quadro dal database. Il colore NON è stato salvato. Ricarica la pagina e riprova.");
+    return;
+  }
+  const member=state.activeMember;
+  const color=state.picked;
+  const before=state.entries;
   const ne={...state.entries};
-  if(!ne[today]) ne[today]={};
-  ne[today]={...ne[today],[state.activeMember]:state.picked};
+  ne[today]={...(ne[today]||{}),[member]:color};
   state.flash=true;
   state.entries=ne;
+  saving=true;
   render();
-  console.log(`[IRIS v2] Saving color for ${state.activeMember} on ${today}:`, state.picked);
   try{
-    await fbSet("iris_entries",ne);
-    console.log(`[IRIS v2] ✅ Firebase save SUCCESS on ${today}`);
+    // Scrive solo questa persona in questo giorno, non l'intero database
+    await fbSet(`iris_entries/${today}/${member}`,color);
+    state.fbStatus="ok";
   }catch(e){
-    console.error(`[IRIS v2] ❌ Firebase save FAILED on ${today}:`, e);
+    console.error("Firebase save FAILED:",e);
+    state.entries=before;
+    state.flash=false;
+    render();
+    alert("Salvataggio non riuscito: il colore NON è stato registrato. Riprova.");
+    return;
+  }finally{
+    saving=false;
   }
-  setTimeout(()=>{state.flash=false;setState({screen:"canvas",evoDay:null});},900);
+  cancelFlash();
+  flashTimer=setTimeout(()=>{flashTimer=null;state.flash=false;setState({screen:"canvas",evoDay:null});},900);
 }
 
-async function doReset(){
-  const pwd=document.getElementById("resetPwd");
-  if(!pwd||pwd.value!=="iris2025"){ alert("Password errata!"); return; }
-  if(!confirm("Sei sicuro? Tutti i colori verranno cancellati per sempre.")) return;
-  try{
-    await fbSet("iris_entries",null);
-    state.entries={};
-    alert("✅ Reset completato. IRIS è pronta per luglio!");
-    setState({screen:"home"});
-  }catch(e){ alert("Errore Firebase: "+e.message); }
+/* ═══════════════════════════════════════
+   EXPORT IMMAGINE
+═══════════════════════════════════════ */
+// PNG 4096 x 4096 px: a 300 dpi circa 35 cm di lato (A3 quadrato e oltre).
+function exportArtwork(){
+  const upTo=state.evoDay!==null?Object.keys(state.entries).sort()[state.evoDay]:null;
+  const c=document.createElement("canvas");
+  drawArtwork(c,state.entries,upTo,4096);
+  c.toBlob(blob=>{
+    if(!blob){ alert("Esportazione non riuscita."); return; }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=`iris_quadro_${todayStr()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  },"image/png");
+}
+
+/* ═══════════════════════════════════════
+   BACKUP
+═══════════════════════════════════════ */
+function downloadBackup(){
+  if(state.fbStatus!=="ok" && state.fbStatus!=="empty"){
+    alert("Il database non è stato letto: il backup non sarebbe affidabile. Ricarica la pagina e riprova.");
+    return;
+  }
+  const payload={exportedAt:new Date().toISOString(),iris_entries:state.raw??null};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=`iris_backup_${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 /* ═══════════════════════════════════════
